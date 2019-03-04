@@ -1,8 +1,10 @@
 #include "fea_analysis/FeaAnalysis.h"
 
+#include "assembler/SerialAssembler.h"
+
 namespace fea_analysis
 {
-    void FeaAnalysis::set_mesh(std::unique_ptr<MeshType> mesh)
+    void FeaAnalysis::set_mesh(std::unique_ptr<Mesh> mesh)
     {
         mesh_ = std::move(mesh);
     }
@@ -12,6 +14,28 @@ namespace fea_analysis
         constitutive_relations_[name] = std::move(relation);
     }
 
+	void FeaAnalysis::set_elements_constitutive_relation(ElementSelection selection, const std::string constitutive_relation_name)
+	{
+		auto find_iter = constitutive_relations_.find(constitutive_relation_name);
+		if (find_iter == constitutive_relations_.end())
+		{
+			throw _UTIL_MSG_EXCEPT_C("Constitutive relation \"" + constitutive_relation_name + "\" not found.");
+		}
+
+		selection.run_selection(*mesh_);
+
+		auto constitutive_relation_ptr = find_iter->second.get();
+		for (auto e_ptr : selection.get_selection())
+		{
+			e_ptr->set_constitutive_relation(constitutive_relation_ptr);
+		}
+	}
+
+	void FeaAnalysis::add_boundary_condition(std::unique_ptr<BoundaryCondition> boundary_condition)
+	{
+		boundary_conditions_.push_back(std::move(boundary_condition));
+	}
+
     void FeaAnalysis::solve_time_steps()
     {
         // If no time step manager has been set through the input script, it is assumed that
@@ -19,10 +43,19 @@ namespace fea_analysis
         if (time_step_manager_ == 0)
             time_step_manager_ = std::make_unique<StaticAnalysisTimeStepManager>();
 
+		assembler_ = std::make_unique<assembler::SerialAssembler>(*mesh_);
+
+		set_element_formulations();
+
         // Setup the dof map and any global matrices/vectors.  The dof map will be
         // used to setup the containers.
         dof_map_ = std::make_unique<dof_manager::DofMap>(*mesh_);
         initialize_linear_algebra();
+
+		for (auto& bc : boundary_conditions_)
+		{
+			bc->initialize(*mesh_, *dof_map_, *gl_constraint_matrix_);
+		}
 
         // Time loop
         time_step_manager_->start_time_step_loop();
@@ -33,4 +66,9 @@ namespace fea_analysis
             write_output();
         } while (time_step_manager_->next_time_step());
     }
+
+	void FeaAnalysis::initialize_linear_algebra()
+	{
+
+	}
 }

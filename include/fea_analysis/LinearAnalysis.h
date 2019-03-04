@@ -21,6 +21,7 @@ namespace fea_analysis
         std::unique_ptr<sparse_linear_algebra::SparseSolver> sparse_solver_;
 
         /// Initialize the global matrices and vectors for the analysis
+		virtual void set_element_formulations() override;
         virtual void initialize_linear_algebra() override;
         virtual void apply_boundary_conditions() override {}
         virtual void solve_time_step() override;
