@@ -2,7 +2,7 @@
 
 #include "flex_mesh/mesh/Mesh.h"
 #include "flex_mesh/node/Node.h"
-#include "flex_mesh/algorithms/Search.h"
+#include "flex_mesh/algorithms/Selection.h"
 
 namespace fea_analysis
 {

@@ -37,14 +37,14 @@ namespace fea_analysis
 	class DirchletBC : public BoundaryCondition
 	{
 	public:
-		DirchletBC(std::unique_ptr<NodeSelection> selection, DirchletBCOpts opts)
-			: selection_(std::move(selection)), opts_(opts)
+		DirchletBC(NodeSelection selection, DirchletBCOpts opts)
+			: selection_(selection), opts_(opts)
 		{
 		}
 		virtual ~DirchletBC() {}
 
 	protected:
-		std::unique_ptr<NodeSelection> selection_;
+		NodeSelection selection_;
 		DirchletBCOpts opts_;
 
 
@@ -58,10 +58,10 @@ namespace fea_analysis
 			const dof_manager::DofMap& dof_map,
 			sparse_linear_algebra::ConstraintMatrix& constraint_matrix) override
 		{
-			selection_->run_selection(mesh);
+			selection_.run_selection(mesh);
 
 			auto node_dof_map = dof_map.get_node_to_global_map();
-			for (auto& n_ptr : selection_->get_selection())
+			for (auto& n_ptr : selection_.get_selection())
 			{
 				auto global_dof = node_dof_map[n_ptr->get_local_number()][opts_.field_component];
 

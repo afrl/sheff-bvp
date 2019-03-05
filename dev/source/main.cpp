@@ -18,21 +18,19 @@ int main()
 
 	// Create the boundary conditions
 	// Fix u along the x = -1 side
-	auto x_neg_1 = std::make_unique<flex_mesh::LambdaCriteria<fea_analysis::Node>>(
-		[](const fea_analysis::Node& n) -> bool {
-			return n.get_coord()[0] == -1.0;
-		});
-	auto x_neg_1_selection = std::make_unique<NodeSelection>();
-	x_neg_1_selection->add_criteria(std::move(x_neg_1));
-	auto fix_u_at_x_neg_1 = std::unique_ptr<DirchletBC>(new DirchletBC(std::move(x_neg_1_selection), { 0 , 0 }));
+    NodeSelection x_neg_1_selection;
+	x_neg_1_selection.add_criteria(
+        [](const fea_analysis::Node& n) -> bool {
+        return n.x() == -1.0;
+    });
+	auto fix_u_at_x_neg_1 = std::unique_ptr<DirchletBC>(new DirchletBC(x_neg_1_selection, { 0 , 0 }));
 	// Specify u along the x = 1 side
-	auto x_pos_1 = std::make_unique<flex_mesh::LambdaCriteria<fea_analysis::Node>>(
-		[](const fea_analysis::Node& n) -> bool {
-		return n.get_coord()[0] == 1.0;
-	});
-	auto x_pos_1_selection = std::make_unique<NodeSelection>();
-	x_pos_1_selection->add_criteria(std::move(x_pos_1));
-	auto fix_u_at_x_pos_1 = std::unique_ptr<DirchletBC>(new DirchletBC(std::move(x_pos_1_selection), { 0 , 1 }));
+    NodeSelection x_pos_1_selection;
+    x_neg_1_selection.add_criteria(
+        [](const fea_analysis::Node& n) -> bool {
+        return n.x() == 1.0;
+    });
+	auto fix_u_at_x_pos_1 = std::unique_ptr<DirchletBC>(new DirchletBC(x_pos_1_selection, { 0 , 1 }));
 
 	LinearElasticAnalysis analysis;
 	analysis.set_mesh(std::move(mesh_ptr));
