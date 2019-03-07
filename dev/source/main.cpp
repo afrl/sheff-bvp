@@ -1,7 +1,7 @@
 #include "fea_analysis/LinearAnalysis.h"
 
 #include "flex_mesh/algorithms/UnitElements.h"
-#include "constitutive/elasticity/LinearElasticity.h"
+#include "constitutive/elasticity/LinearElasticityConstitutiveRelation.h"
 
 using namespace fea_analysis;
 
@@ -11,10 +11,13 @@ int main()
 	auto mesh_ptr = flex_mesh::get_unit_linear_hex_ptr<fea_analysis::Mesh>();
 
 	// Create a constitutive relation
-	auto constitutive_relation_ptr = std::make_unique<constitutive::LinearElasticity>();
-	const double E = 1e9;
-	const double nu = 0.3;
-	constitutive_relation_ptr->set_from_engineering_parameters(E, nu);
+    const double E = 1e9;
+    const double nu = 0.3;
+    auto properties = std::make_unique<constitutive::LinearElasticProperties>();
+    properties->set_isotropic_E_nu(E, nu);
+    properties->set_thermal_expansion_isotropic(1e-4);
+	auto constitutive_relation_ptr = std::make_unique<constitutive::LinearElasticityConstitutiveRelation>();
+	constitutive_relation_ptr->set_elastic_properties(std::move(properties));
 
 	// Create the boundary conditions
 	// Fix u along the x = -1 side
