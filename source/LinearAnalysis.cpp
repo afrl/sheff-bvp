@@ -7,7 +7,7 @@
 #include "sparse_linear_algebra/Factory.h"
 
 #include "output/Output.h"
-#include "output/OuputFeaAnalysisHelpers.h"
+#include "output/OutputFeaAnalysisHelpers.h"
 
 namespace fea_analysis
 {
