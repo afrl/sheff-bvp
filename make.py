@@ -125,8 +125,9 @@ def process_args():
     "use-mpi=", "make-tests=", "make-dev=", "generator=", "print", "config", "build", "test", "doc", 
     "clear-cache", "clean"])
 
-  except getopt.GetoptError:
+  except getopt.GetoptError as err:
     print ("\n===Error: invalid command-line options or arguments")
+    print(str(err))
     usage ()
     sys.exit(1)
 

@@ -6,6 +6,7 @@ find_package(FlexMesh CONFIG REQUIRED HINTS "${CMAKE_SOURCE_DIR}/../flex_mesh/bu
 find_package(FeaIo CONFIG REQUIRED HINTS "${CMAKE_SOURCE_DIR}/../fea_io/build" "${CMAKE_SOURCE_DIR}/../fea_io/install_dir")
 find_package(FiniteElement CONFIG REQUIRED HINTS "${CMAKE_SOURCE_DIR}/../finite_element/build" "${CMAKE_SOURCE_DIR}/../finite_element/install_dir")
 find_package(SparseLinearAlgebra CONFIG REQUIRED HINTS "${CMAKE_SOURCE_DIR}/../sparse_linear_algebra/build" "${CMAKE_SOURCE_DIR}/../sparse_linear_algebra/install_dir")
+find_package(Output CONFIG REQUIRED HINTS "${CMAKE_SOURCE_DIR}/../output/build" "${CMAKE_SOURCE_DIR}/../output/install_dir")
 find_package(DofManager CONFIG REQUIRED HINTS "${CMAKE_SOURCE_DIR}/../dof_manager/build" "${CMAKE_SOURCE_DIR}/../dof_manager/install_dir")
 find_package(Assembler CONFIG REQUIRED HINTS "${CMAKE_SOURCE_DIR}/../assembler/build" "${CMAKE_SOURCE_DIR}/../assembler/install_dir")
 

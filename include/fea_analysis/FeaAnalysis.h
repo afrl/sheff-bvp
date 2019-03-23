@@ -4,6 +4,7 @@
 #include "constitutive/BaseConstitutiveRelation.h"
 #include "assembler/Assembler.h"
 #include "dof_manager/DofMap.h"
+#include "flex_mesh/maps/SubcomponentMaps.h"
 
 #include "Defines.h"
 #include "BoundaryCondition.h"
@@ -38,6 +39,7 @@ namespace fea_analysis
     protected:
         std::unique_ptr<TimeStepManager> time_step_manager_;
         std::unique_ptr<Mesh> mesh_;
+        flex_mesh::SubcomponentMaps subcomponent_maps_;
         std::unique_ptr<assembler::Assembler> assembler_;
         std::unique_ptr<dof_manager::DofMap> dof_map_;
         std::vector<std::unique_ptr<BoundaryCondition>> boundary_conditions_;
@@ -65,7 +67,7 @@ namespace fea_analysis
         gl_container.set_local_global_dof_map(
             dof_map_->get_element_to_global_map(),
             dof_map_->get_element_num_dofs(),
-            mesh_->elements().size(),
+            static_cast<flex_mesh::LocalIndex>(mesh_->elements().size()),
             dof_map_->get_n_local_dofs(),
             dof_map_->get_n_global_dofs());
     }

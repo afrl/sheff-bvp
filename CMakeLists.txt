@@ -29,6 +29,7 @@ find_package(FlexMesh CONFIG REQUIRED HINTS "${CMAKE_SOURCE_DIR}/../flex_mesh/bu
 find_package(FeaIo CONFIG REQUIRED HINTS "${CMAKE_SOURCE_DIR}/../fea_io/build" "${CMAKE_SOURCE_DIR}/../fea_io/install_dir")
 find_package(FiniteElement CONFIG REQUIRED HINTS "${CMAKE_SOURCE_DIR}/../finite_element/build" "${CMAKE_SOURCE_DIR}/../finite_element/install_dir")
 find_package(SparseLinearAlgebra CONFIG REQUIRED HINTS "${CMAKE_SOURCE_DIR}/../sparse_linear_algebra/build" "${CMAKE_SOURCE_DIR}/../sparse_linear_algebra/install_dir")
+find_package(Output CONFIG REQUIRED HINTS "${CMAKE_SOURCE_DIR}/../output/build" "${CMAKE_SOURCE_DIR}/../output/install_dir")
 find_package(DofManager CONFIG REQUIRED HINTS "${CMAKE_SOURCE_DIR}/../dof_manager/build" "${CMAKE_SOURCE_DIR}/../dof_manager/install_dir")
 find_package(Assembler CONFIG REQUIRED HINTS "${CMAKE_SOURCE_DIR}/../assembler/build" "${CMAKE_SOURCE_DIR}/../assembler/install_dir")
 
@@ -68,6 +69,7 @@ target_link_libraries(feaanalysis PUBLIC FlexMesh::FlexMesh)
 target_link_libraries(feaanalysis PUBLIC FeaIo::FeaIo)
 target_link_libraries(feaanalysis PUBLIC FiniteElement::FiniteElement)
 target_link_libraries(feaanalysis PUBLIC SparseLinearAlgebra::SparseLinearAlgebra)
+target_link_libraries(feaanalysis PUBLIC Output::Output)
 target_link_libraries(feaanalysis PUBLIC DofManager::DofManager)
 target_link_libraries(feaanalysis PUBLIC Assembler::Assembler)
 
@@ -83,6 +85,7 @@ assign_source_group_FlexMesh()
 assign_source_group_FeaIo()
 assign_source_group_FiniteElement()
 assign_source_group_SparseLinearAlgebra()
+assign_source_group_Output()
 assign_source_group_DofManager()
 assign_source_group_Assembler()
 

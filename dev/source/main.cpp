@@ -5,8 +5,10 @@
 
 using namespace fea_analysis;
 
-int main()
+int main(int argc, char ** argv)
 {
+    fea_io::MPIUtils::init(&argc, &argv);
+
 	// Use a single linear hex for now
 	auto mesh_ptr = flex_mesh::get_unit_linear_hex_ptr<fea_analysis::Mesh>();
 
