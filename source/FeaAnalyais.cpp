@@ -1,12 +1,32 @@
 #include "fea_analysis/FeaAnalysis.h"
 
 #include "assembler/SerialAssembler.h"
+#include "fea_io/meta/MetaReader.h"
+#include "flex_mesh/algorithms/IOFeaIo.h"
 
 namespace fea_analysis
 {
+    void FeaAnalysis::set_input_meta(const std::string relative_path_to_meta)
+    {
+        fea_io::MetaReader reader;
+        reader.open(relative_path_to_meta);
+        std::string mesh_filepath = reader.get_mesh_path(0);
+
+        mesh_ = std::make_unique<Mesh>();
+        flex_mesh::FEAIOInterface<Mesh>::read_partition(*mesh_, relative_path_to_meta, 0, 0);
+
+        output_meta_.open("output", "post-analysis");
+        output_meta_.add_mesh_path(0, 0, mesh_filepath);
+    }
+
     void FeaAnalysis::set_mesh(std::unique_ptr<Mesh> mesh)
     {
         mesh_ = std::move(mesh);
+
+        output_meta_.open("output", "post-analysis");
+        auto mesh_filepath = output_meta_.add_mesh_path(0, 0, "initial_mesh");
+
+        flex_mesh::FEAIOInterface<Mesh>::write(*mesh_, mesh_filepath);
     }
 
     void FeaAnalysis::add_constitutive_relation(const std::string name, std::unique_ptr<constitutive::BaseConstitutiveRelation> relation)

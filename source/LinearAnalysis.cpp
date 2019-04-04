@@ -94,9 +94,14 @@ namespace fea_analysis
 
     void LinearElasticAnalysis::write_output()
     {
+        // Create a writer for this time step
+        auto data_filepath = output_meta_.add_data_path(0, 0, "Data");
+        fea_io::DataWriter<flex_mesh::GlobalIndex, flex_mesh::LocalIndex, flex_mesh::FloatType> writer;
+
         // DEBUG TODO delete
-        output::OutputFlagCache cache;
-        output_flags_.push_back(std::make_unique<output::OutputFlag>("Displacement", "Global", "Node", cache));
+        output_flags_.push_back(std::make_unique<output::OutputFlag>("Displacement", "Global", "Node", output_flag_cache_));
+        output_flags_.push_back(std::make_unique<output::OutputFlag>("Stress", "Global", "Element", output_flag_cache_));
+        output_flags_.push_back(std::make_unique<output::OutputFlag>("Strain", "Global", "Element", output_flag_cache_));
 
         std::vector<output::OutputFlag*> flags_to_be_output;
         for (auto& flag : output_flags_)
@@ -113,7 +118,7 @@ namespace fea_analysis
         ascii_writer_.open(output::get_data_file_name() + ".txt");
 
         // Create an output algorithm for each output flag involved in this write
-        auto output_algorithms = output::get_output_algorithms(ascii_writer_, writer_,
+        auto output_algorithms = output::get_output_algorithms(ascii_writer_, writer,
             mesh_->get_partition_id(), flags_to_be_output,
             static_cast<flex_mesh::LocalIndex>(mesh_->nodes().size()), subcomponent_maps_);
 
@@ -135,7 +140,7 @@ namespace fea_analysis
         }
 
         // Initialize the data writer for this output step
-        writer_.initialize(output::get_data_file_name(),
+        writer.initialize(data_filepath,
             mesh_info, partition_info, n_quad_points, array_infos);
 
         auto multi_field_calc = output::get_element_multi_field_calc(output_algorithms);
@@ -175,7 +180,7 @@ namespace fea_analysis
             output_algorithm->post_loop_step();
         }
 
-        writer_.close();
+        writer.close();
         ascii_writer_.close();
     }
 }

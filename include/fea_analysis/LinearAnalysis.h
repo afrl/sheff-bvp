@@ -1,12 +1,8 @@
 #include "fea_analysis/FeaAnalysis.h"
 
-#include "output/Output.h"
-
 #include "sparse_linear_algebra/SparseMatrix.h"
 #include "sparse_linear_algebra/Vector.h"
 #include "sparse_linear_algebra/SparseSolver.h"
-
-#include "fea_io/data/DataWriter.h"
 
 #include <memory>
 #include <vector>
@@ -59,8 +55,7 @@ namespace fea_analysis
         virtual void write_restart_file() override {}
 
     private:
-        std::vector<std::unique_ptr<output::OutputFlag>> output_flags_;
-        fea_io::DataWriter<flex_mesh::GlobalIndex, flex_mesh::LocalIndex, flex_mesh::FloatType> writer_;
+        
         std::ofstream ascii_writer_;
     };
 }

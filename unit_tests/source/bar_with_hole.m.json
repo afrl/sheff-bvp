@@ -1,0 +1,58 @@
+{
+    "meta_info": {
+        "components": [
+            {
+                "id": 0,
+                "lcs_assignment": "None",
+                "lcs_parameterization": "Quaternion",
+                "name": "Component0"
+            }
+        ],
+        "connectivity_scheme": 0,
+        "dimensionality": 3,
+        "extent": {
+            "x_max": 100.0,
+            "x_min": 0.0,
+            "y_max": 20.0,
+            "y_min": 0.0,
+            "z_max": 5.0,
+            "z_min": 0.0
+        },
+        "partition_offsets": [
+            0
+        ],
+        "total_num_elements": 3596,
+        "total_num_nodes": 5724,
+        "total_num_partitions": 1
+    },
+    "partition_info": [
+        {
+            "extent": {
+                "x_max": 100.0,
+                "x_min": 0.0,
+                "y_max": 20.0,
+                "y_min": 0.0,
+                "z_max": 5.0,
+                "z_min": 0.0
+            },
+            "num_elements": 3596,
+            "num_nodes": 5724,
+            "num_subcomponents": 1,
+            "partition_id": 0,
+            "subcomponents": [
+                {
+                    "component_id": 0,
+                    "num_elements_in_subcomponent": 3596,
+                    "num_nodes_in_subcomponent": 5724,
+                    "offset": 0
+                }
+            ],
+            "total_num_connectivity_entries": 28768
+        }
+    ],
+    "types": {
+        "coord_type_size": 8,
+        "global_index_size": 4,
+        "local_index_size": 4
+    }
+}

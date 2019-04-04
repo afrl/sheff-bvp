@@ -1,0 +1,13 @@
+{
+    "analysis": {
+        "attributes": [],
+        "name": "BarWithHole",
+        "timesteps": [
+            {
+                "mesh_path": "BarWithHole",
+                "time": 0.0,
+                "time_step_id": 0
+            }
+        ]
+    }
+}
