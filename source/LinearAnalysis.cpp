@@ -16,7 +16,7 @@ namespace fea_analysis
 		// For a linear analysis, for now, assume all elements get an InfinitesmalStrain formulation
 		for (auto& e_ptr : mesh_->elements())
 		{
-			auto formulation = std::unique_ptr<finite_element::BaseFormulation, finite_element::BaseFormulationDeleter>(new finite_element::InfinitesimalStrainFormulation(e_ptr.get()));
+			auto formulation = std::unique_ptr<finite_element::BaseFormulation>(new finite_element::InfinitesimalStrainFormulation(e_ptr.get()));
 			e_ptr->set_formulation(std::move(formulation));
 			e_ptr->allocate_isvs();
 		}
