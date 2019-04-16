@@ -16,7 +16,10 @@ int main(int argc, char ** argv)
     const double E = 1e9;
     const double nu = 0.3;
     auto properties = std::make_unique<constitutive::LinearElasticProperties>();
-    properties->set_isotropic_E_nu(E, nu);
+    properties->set_orthotropic(
+        221400000000, 12600000000, 12600000000, // E11, E22, E33
+        0.34, 0.34, 0.32, // nu12, nu13, nu23
+        7400000000, 7400000000, 4772700000); // G12, G13, G23
     properties->set_thermal_expansion_isotropic(1e-4);
     auto constitutive_relation_ptr = std::make_unique<constitutive::LinearElasticityConstitutiveRelation>();
     constitutive_relation_ptr->set_elastic_properties(std::move(properties));
