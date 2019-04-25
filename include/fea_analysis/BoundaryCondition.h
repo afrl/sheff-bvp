@@ -60,7 +60,7 @@ namespace fea_analysis
 		{
 			selection_.run_selection(mesh);
 
-			auto node_dof_map = dof_map.get_node_to_global_map();
+			auto node_dof_map = dof_map.get_array_of_node_maps();
 			for (auto& n_ptr : selection_.get_selection())
 			{
 				auto global_dof = node_dof_map[n_ptr->get_local_number()][opts_.field_component];

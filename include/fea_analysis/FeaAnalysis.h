@@ -74,8 +74,8 @@ namespace fea_analysis
     inline void FeaAnalysis::initialize_container(GlobalContainer & gl_container)
     {
         gl_container.set_local_global_dof_map(
-            dof_map_->get_element_to_global_map(),
-            dof_map_->get_element_num_dofs(),
+            dof_map_->get_array_of_element_maps(),
+            dof_map_->get_array_of_element_n_dofs(),
             static_cast<flex_mesh::LocalIndex>(mesh_->elements().size()),
             dof_map_->get_n_local_dofs(),
             dof_map_->get_n_global_dofs());
