@@ -9,6 +9,9 @@
 
 namespace output
 {
+    template<typename T>
+    static T from_string(const std::string & str);
+
     enum class LinearElasticField
     {
         Displacement,
@@ -17,7 +20,7 @@ namespace output
     };
 
     template<>
-    static LinearElasticField output::from_string(const std::string & str)
+    LinearElasticField from_string(const std::string & str)
     {
         if (utility::istr_is_equal(str, "Displacement"))
             return LinearElasticField::Displacement;
@@ -55,7 +58,7 @@ namespace fea_analysis
         virtual void write_restart_file() override {}
 
     private:
-        
+
         std::ofstream ascii_writer_;
     };
 }
