@@ -32,7 +32,7 @@ find_package(SparseLinearAlgebra CONFIG REQUIRED HINTS "${CMAKE_SOURCE_DIR}/../s
 find_package(Output CONFIG REQUIRED HINTS "${CMAKE_SOURCE_DIR}/../output/build" "${CMAKE_SOURCE_DIR}/../output/install_dir")
 find_package(DofManager CONFIG REQUIRED HINTS "${CMAKE_SOURCE_DIR}/../dof_manager/build" "${CMAKE_SOURCE_DIR}/../dof_manager/install_dir")
 find_package(Assembler CONFIG REQUIRED HINTS "${CMAKE_SOURCE_DIR}/../assembler/build" "${CMAKE_SOURCE_DIR}/../assembler/install_dir")
-
+find_package(FeaCrack CONFIG REQUIRED HINTS "${CMAKE_SOURCE_DIR}/../fea_crack/build" "${CMAKE_SOURCE_DIR}/../fea_crack/install_dir")
 
 ################################
 # Setting up FEAANALYSIS target #
@@ -72,6 +72,7 @@ target_link_libraries(feaanalysis PUBLIC SparseLinearAlgebra::SparseLinearAlgebr
 target_link_libraries(feaanalysis PUBLIC Output::Output)
 target_link_libraries(feaanalysis PUBLIC DofManager::DofManager)
 target_link_libraries(feaanalysis PUBLIC Assembler::Assembler)
+target_link_libraries(feaanalysis PUBLIC FeaCrack::FeaCrack)
 
 
 # Assign source groups
@@ -88,6 +89,7 @@ assign_source_group_SparseLinearAlgebra()
 assign_source_group_Output()
 assign_source_group_DofManager()
 assign_source_group_Assembler()
+assign_source_group_FeaCrack()
 
 
 #################################
