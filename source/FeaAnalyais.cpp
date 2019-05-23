@@ -56,27 +56,30 @@ namespace fea_analysis
 		boundary_conditions_.push_back(std::move(boundary_condition));
 	}
 
-    void FeaAnalysis::solve_time_steps()
+    void fea_analysis::FeaAnalysis::setup_analysis()
     {
         // If no time step manager has been set through the input script, it is assumed that
         // this is a static analysis.
         if (time_step_manager_ == 0)
             time_step_manager_ = std::make_unique<StaticAnalysisTimeStepManager>();
 
-		assembler_ = std::make_unique<assembler::SerialAssembler>(*mesh_);
+        assembler_ = std::make_unique<assembler::SerialAssembler>(*mesh_);
 
-		set_element_formulations();
+        set_element_formulations();
 
         // Setup the dof map and any global matrices/vectors.  The dof map will be
         // used to setup the containers.
         dof_map_ = std::make_unique<dof_manager::DofMap>(*mesh_);
         initialize_linear_algebra();
 
-		for (auto& bc : boundary_conditions_)
-		{
-			bc->initialize(*mesh_, *dof_map_, *gl_constraint_matrix_);
-		}
+        for (auto& bc : boundary_conditions_)
+        {
+            bc->initialize(*mesh_, *dof_map_, *gl_constraint_matrix_);
+        }
+    }
 
+    void FeaAnalysis::solve_time_steps()
+    {
         // Time loop
         time_step_manager_->start_time_step_loop();
         do

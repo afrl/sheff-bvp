@@ -35,6 +35,8 @@ namespace fea_analysis
         /// on the Node selection given to it when constructed.
         void add_boundary_condition(std::unique_ptr<BoundaryCondition> boundary_condition);
 
+        /// Creates all of the objects needed before solve_time_steps can be called
+        virtual void setup_analysis();
         /// Loops over the time steps, does iteration, writes output, etc.
         /// It is the primary analysis method.
         void solve_time_steps();

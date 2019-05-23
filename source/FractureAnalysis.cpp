@@ -1,53 +1,155 @@
 #include "fea_analysis/FractureAnalysis.h"
 
 #include "flex_mesh/maps/AdjacencyLists.h"
+#include "flex_mesh/algorithms/Search.h"
 
 #include "simple_math/Utility.h"
 
 #include "finite_element/FiniteElement.h"
 #include "finite_element/BaseFormulation.h"
 #include "finite_element/elasticity/InfinitesimalStrain.h"
-
-#include "fea_crack/RXFEMCrack.h"
+#include "finite_element/damage/RXFEMFormulation.h"
 
 #include "sparse_linear_algebra/Factory.h"
 
+#include <memory>
+
 namespace fea_analysis
 {
+    void FractureAnalysis::setup_analysis()
+    {
+        LinearElasticAnalysis::setup_analysis();
+        adjacency_list_.initialize(*mesh_);
+        assembler_->set_element_workspaces();
+    }
+
+    void FractureAnalysis::insert_precracks(const std::vector<simple_math::Point>& initiation_points)
+    {
+        // Initiate all of the cracks
+        for (auto i : utility::indices(initiation_points))
+        {
+            auto new_crack = std::make_unique<fea_crack::RXFEMCrack>(
+                i, fea_crack::CrackRepType::LevelSet, *dof_map_, *mesh_, adjacency_list_);
+            cracks_.push_back(std::move(new_crack));
+            auto initial_element_ptr = flex_mesh::find_element_with_point(*mesh_, initiation_points[i]);
+            if (!initial_element_ptr)
+            {
+                throw _UTIL_MSG_EXCEPT("No element was found that contains the point "
+                    + simple_math::to_string(initiation_points[i]));
+            }
+            auto& direction_criteria = initial_element_ptr->get_direction_criterion();
+            simple_math::VoigtVector zero_stress = simple_math::VoigtVector::Zero(6);
+            auto crack_normal = direction_criteria.eval(i, initiation_points[i], zero_stress);
+            cracks_.back()->initiate(initial_element_ptr, 0, initiation_points[i], crack_normal);
+
+            //cracks.back()->write_vtk("./", 0);
+        }
+
+        // Grow all the cracks one element until they can no longer grow
+        int growth_step = 1;
+        auto element_num_dofs = dof_map_->get_array_of_element_n_dofs();
+        for (auto& crack : cracks_)
+        {
+            auto& crack_state = crack->get_crack_state();
+            while (!crack_state.get_enrichments_at_front().empty())
+            {
+                std::vector<fea_crack::CrackState::EnrichmentAtFront*> enrichments_at_front_to_grow;
+                for (auto& enrichment_at_front : crack_state.get_enrichments_at_front())
+                {
+                    auto element_ptr = enrichment_at_front->get_enrichment()->get_element();
+                    auto& criterion = element_ptr->get_propagation_criterion();
+                    if (criterion.eval(crack_state.get_global_crack_id(),
+                        element_ptr->get_mean_coordinate(), simple_math::Vector3D::Zero()))
+                    {
+                        enrichments_at_front_to_grow.push_back(enrichment_at_front.get());
+                    }
+                }
+
+                // If no enrichments can grow due to the propagation criteria, then stop
+                if (enrichments_at_front_to_grow.empty())
+                {
+                    break;
+                }
+
+                for (auto& enrichment_at_front_to_grow : enrichments_at_front_to_grow)
+                {
+                    std::vector<fea_crack::LeafDofInformation> leaves_to_grow_into;
+                    std::vector<simple_math::GeneralVector> solution_of_ahead_of_tip_elements;
+                    auto& elements_ahead_of_tip = enrichment_at_front_to_grow->get_adjacent_elements_ahead_of_front();
+                    for (auto& element_ahead_of_tip : elements_ahead_of_tip)
+                    {
+                        auto ahead_of_tip_element_index = element_ahead_of_tip->get_element()->get_local_number();
+                        solution_of_ahead_of_tip_elements.emplace_back(element_num_dofs[ahead_of_tip_element_index]);
+                        solution_of_ahead_of_tip_elements.back().setZero();
+                    }
+
+                    crack->grow_crack_front(*enrichment_at_front_to_grow,
+                        solution_of_ahead_of_tip_elements);
+                }
+                //crack->write_vtk("./", growth_step);
+                growth_step++;
+            }
+        }
+
+        for (auto& crack : cracks_)
+        {
+            crack->write_vtk("./", 0);
+        }
+    }
+
     void FractureAnalysis::solve_time_step()
     {
+        gl_stiffness_->update_local_global_dof_map(
+            mesh_->elements().size(),
+            dof_map_->get_n_local_dofs(),
+            dof_map_->get_n_global_dofs());
+        gl_displacement_->update_local_global_dof_map(
+            mesh_->elements().size(),
+            dof_map_->get_n_local_dofs(),
+            dof_map_->get_n_global_dofs());
+        gl_eigenstrain_force_->update_local_global_dof_map(
+            mesh_->elements().size(),
+            dof_map_->get_n_local_dofs(),
+            dof_map_->get_n_global_dofs());
+        gl_rhs_->update_local_global_dof_map(
+            mesh_->elements().size(),
+            dof_map_->get_n_local_dofs(),
+            dof_map_->get_n_global_dofs());
+
         // TODO indicate if Secant or Tangent with BCUpdateType::Secant
         apply_boundary_conditions();
 
-        // As a test, initiate a crack in element 0
+        solve_equillibrium_step();
+
+        /*
+        // TODO indicate if Secant or Tangent with BCUpdateType::Secant
+        apply_boundary_conditions();
+
+        solve_equillibrium_step();
+
+        bool found_equillibrium = false;
+
+        while (!found_equillibrium)
         {
-            fea_crack::RXFEMCrack::ElementAdjacencyList adjacency_list;
-            adjacency_list.initialize(*mesh_);
+            solve_equillibrium_step();
 
-            fea_crack::RXFEMCrack crack(0, fea_crack::CrackRepType::LevelSet,
-                *dof_map_, *mesh_, adjacency_list);
+            auto growth_successful = try_to_grow_cracks();
 
-            simple_math::Point initial_coord = { 0.5, 0.5, 0.5 };
-            simple_math::Point initial_norm = { 1.0, 0.0, 0.0 };
-            simple_math::Vector3D initial_normal = simple_math::point_as_vector(initial_norm);
-
-            // Initiate the crack
-            finite_element::ElementWorkspace e_workspace;
-            mesh_->elements().front()->set_workspace(&e_workspace);
-            crack.initiate(mesh_->elements().front(), 0, initial_coord, initial_normal);
-
-            // Call update_local_global_dof_map for each container
-            const auto n_elements = static_cast<flex_mesh::LocalIndex>(mesh_->elements().size());
-            gl_displacement_->update_local_global_dof_map(n_elements,
-                dof_map_->get_n_local_dofs(), dof_map_->get_n_global_dofs());
-            gl_eigenstrain_force_->update_local_global_dof_map(n_elements,
-                dof_map_->get_n_local_dofs(), dof_map_->get_n_global_dofs());
-            gl_rhs_->update_local_global_dof_map(n_elements,
-                dof_map_->get_n_local_dofs(), dof_map_->get_n_global_dofs());
-            gl_stiffness_->update_local_global_dof_map(n_elements,
-                dof_map_->get_n_local_dofs(), dof_map_->get_n_global_dofs());
+            if (!growth_successful)
+            {
+                auto initations_successful = try_to_initiate_cracks();
+                found_equillibrium = !initations_successful;
+            }
+            else
+            {
+                found_equillibrium = false;
+            }
         }
+        */
+    }
 
+    void FractureAnalysis::solve_equillibrium_step()
+    {
         //////////////
         // Assembly //
         //////////////
@@ -55,7 +157,7 @@ namespace fea_analysis
         // Queue assembly of the global stiffness matrix
         assembler_->queue_matrix_assembly(
             gl_stiffness_.get(),
-            [](finite_element::FiniteElement& fe) -> auto
+            [](finite_element::FiniteElement & fe) -> auto
         {
             return fe.get_formulation().get_element_matrix();
         });
@@ -84,5 +186,100 @@ namespace fea_analysis
             gl_stiffness_,
             gl_rhs_,
             gl_displacement_);
+    }
+
+    bool FractureAnalysis::try_to_initiate_cracks()
+    {
+        bool successful = false;
+        finite_element::ElementWorkspace element_workspace;
+        for (auto& e_ptr : mesh_->elements())
+        {
+            // Provide the current solution in case the element requries it.
+            auto elem_solution_vector = gl_displacement_->get_element_part(e_ptr->get_local_number());
+
+            // This should be separated out in the future, but for now provide the workspace
+            e_ptr->set_workspace(&element_workspace);
+
+            // Start calculation block
+            e_ptr->start_calculations(elem_solution_vector);
+
+            auto& formulation = e_ptr->get_formulation();
+            auto elastic_formulation = dynamic_cast<finite_element::InfinitesimalStrainFormulation*>(&formulation);
+            if (elastic_formulation)
+            {
+                auto initiation_result = elastic_formulation->eval_initiation_criterion();
+                if (initiation_result.criterion_satisified)
+                {
+                    auto new_crack = std::unique_ptr<fea_crack::RXFEMCrack>(
+                        new fea_crack::RXFEMCrack(cracks_.size(), fea_crack::CrackRepType::LevelSet,
+                            *dof_map_, *mesh_, adjacency_list_));
+                    new_crack->initiate(e_ptr.get(), 0, initiation_result.point, initiation_result.crack_plane_normal);
+                    cracks_.push_back(std::move(new_crack));
+                    successful = true;
+                }
+            }
+
+            auto rxfem_formulation = dynamic_cast<finite_element::RXFEMFormulation*>(&formulation);
+            if (rxfem_formulation)
+            {
+                auto initiation_results = rxfem_formulation->eval_initiation_criterion();
+                for (auto i : utility::indices(initiation_results))
+                {
+                    auto& initiation_result = initiation_results[i];
+                    if (initiation_result.criterion_satisified)
+                    {
+                        auto new_crack = std::unique_ptr<fea_crack::RXFEMCrack>(
+                            new fea_crack::RXFEMCrack(cracks_.size(), fea_crack::CrackRepType::LevelSet,
+                                *dof_map_, *mesh_, adjacency_list_));
+                        new_crack->initiate(e_ptr.get(), i, initiation_result.point, initiation_result.crack_plane_normal);
+                        cracks_.push_back(std::move(new_crack));
+                        successful = true;
+                    }
+                }
+            }
+
+            // End calculation block
+            e_ptr->end_calculations();
+        }
+        return successful;
+    }
+
+    bool FractureAnalysis::try_to_grow_cracks()
+    {
+        /*
+        bool growth_successful = false;
+        for (auto& crack : cracks_)
+        {
+            auto& crack_state = crack->get_crack_state();
+            auto& enrichments_at_front = crack_state.get_enrichments_at_front();
+
+            std::vector<fea_crack::CrackState::Index> enrichments_at_crack_tip_to_grow;
+            if (enrichments_at_front.size() > 0)
+            {
+                enrichments_at_crack_tip_to_grow.push_back(0);
+            }
+
+            auto element_num_dofs = dof_map_->get_array_of_element_n_dofs();
+            for (auto& enrichment_to_grow_index : enrichments_at_crack_tip_to_grow)
+            {
+                std::vector<fea_crack::LeafDofInformation> leaves_to_grow_into;
+                std::vector<simple_math::GeneralVector> solution_of_ahead_of_tip_elements;
+                auto& enrichment_to_grow = crack_state.get_enrichments_at_front()[enrichment_to_grow_index];
+                auto& elements_ahead_of_tip = enrichment_to_grow->get_adjacent_elements_ahead_of_front();
+                for (auto& element_ahead_of_tip : elements_ahead_of_tip)
+                {
+                    auto ahead_of_tip_element_index = element_ahead_of_tip->get_element()->get_local_number();
+                    solution_of_ahead_of_tip_elements.emplace_back(element_num_dofs[ahead_of_tip_element_index]);
+                    solution_of_ahead_of_tip_elements.back().setZero();
+                }
+
+                crack->grow_crack_front(enrichment_to_grow_index, solution_of_ahead_of_tip_elements);
+                growth_successful = true;
+            }
+        }
+
+        return growth_successful;
+        */
+        return false;
     }
 }
