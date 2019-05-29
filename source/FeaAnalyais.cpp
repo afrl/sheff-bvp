@@ -3,6 +3,7 @@
 #include "assembler/SerialAssembler.h"
 #include "fea_io/meta/MetaReader.h"
 #include "flex_mesh/algorithms/IOFeaIo.h"
+#include "finite_element/BaseFormulation.h"
 
 namespace fea_analysis
 {
@@ -71,11 +72,6 @@ namespace fea_analysis
         // used to setup the containers.
         dof_map_ = std::make_unique<dof_manager::DofMap>(*mesh_);
         initialize_linear_algebra();
-
-        for (auto& bc : boundary_conditions_)
-        {
-            bc->initialize(*mesh_, *dof_map_, *gl_constraint_matrix_);
-        }
     }
 
     void FeaAnalysis::solve_time_steps()
@@ -94,4 +90,18 @@ namespace fea_analysis
 	{
 
 	}
+
+    void FeaAnalysis::apply_boundary_conditions()
+    {
+        for (auto& bc : boundary_conditions_)
+        {
+            // IMPORTANT NOTE: this assumes the field has # of components as dimensionality
+            // This works for displacement with solid elements, but reconsider what should
+            // be done to handle scalar fields, shell elements, combined fields, etc.
+            // TODO figure out a robust term strategy for this
+            bc->initialize(*mesh_, *dof_map_,
+                utility::GlobalVariables::get_dimensionality(),
+                *gl_constraint_matrix_);
+        }
+    }
 }

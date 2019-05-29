@@ -53,6 +53,7 @@ int main(int argc, char ** argv)
 	auto fix_u_at_x_pos_1 = std::unique_ptr<DirchletBC>(new DirchletBC(x_pos_1_selection, { 0 , 1 }));
 
     FractureAnalysis analysis;
+    auto weak_mesh_ptr = mesh_ptr.get();
 	analysis.set_mesh(std::move(mesh_ptr));
 	analysis.add_constitutive_relation("IsotropicMaterial", std::move(constitutive_relation_ptr));
 	analysis.set_elements_constitutive_relation(fea_analysis::ElementSelection(), "IsotropicMaterial");
@@ -60,7 +61,22 @@ int main(int argc, char ** argv)
     analysis.add_boundary_condition(std::move(fix_v_at_y_neg_1));
     analysis.add_boundary_condition(std::move(fix_w_at_z_neg_1));
 	analysis.add_boundary_condition(std::move(fix_u_at_x_pos_1));
-	analysis.solve_time_steps();
+
+    bool entered_circle_region = false;
+    constitutive::PositionFunctionDirectionCriterion direction_criterion(
+        [&entered_circle_region](const int& crack_index, const simple_math::Point& point) -> simple_math::Vector3D
+    {
+        return simple_math::Vector3D(1, 0, 0);
+    });
+    for (auto& e_ptr : weak_mesh_ptr->elements())
+    {
+        e_ptr->set_direction_criterion(direction_criterion);
+    }
+
+    analysis.setup_analysis();
+    simple_math::Point initial_coord = { 0.075, 0.2, 0 };
+    analysis.insert_precracks({ initial_coord });
+    analysis.solve_time_steps();
 
 	return 0;
 }

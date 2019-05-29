@@ -116,7 +116,6 @@ namespace fea_analysis
             dof_map_->get_n_local_dofs(),
             dof_map_->get_n_global_dofs());
 
-        // TODO indicate if Secant or Tangent with BCUpdateType::Secant
         apply_boundary_conditions();
 
         solve_equillibrium_step();
@@ -159,8 +158,22 @@ namespace fea_analysis
             gl_stiffness_.get(),
             [](finite_element::FiniteElement & fe) -> auto
         {
-            return fe.get_formulation().get_element_matrix();
+            auto element_matrix = fe.get_formulation().get_element_matrix();
+
+            std::string output_path = "ElementStiffness_" + std::to_string(fe.get_global_number()) + ".txt";
+            std::ofstream output_stream(output_path);
+            output_stream << element_matrix.str() << std::endl;
+            output_stream.close();
+
+            return element_matrix;
         });
+
+        {
+            std::string output_path = "DoFMaps.txt";
+            std::ofstream output_stream(output_path);
+            output_stream << dof_map_->str() << std::endl;
+            output_stream.close();
+        }
 
         // Queue assembly of the global vector containing RHS terms pertaining
         // to eigenstrains (such as thermal strain, plastic strain, etc.)

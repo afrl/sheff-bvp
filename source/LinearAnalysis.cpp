@@ -44,6 +44,8 @@ namespace fea_analysis
         initialize_container(*gl_rhs_);
 
         sparse_linear_algebra::SparseSolverOptions opts;
+        opts.relative_tol = 1e-16;
+        opts.requires_nonsymmetric = false;
         sparse_solver_ = sparse_linear_algebra::LinAlgFactory::create_solver(opts);
     }
 
@@ -164,6 +166,7 @@ namespace fea_analysis
             // Start calculation block
             e_ptr->start_calculations(elem_solution_vector);
 
+            auto e_number = e_ptr->get_global_number();
             e_ptr->get_formulation().calculate(multi_field_calc);
 
             // End calculation block

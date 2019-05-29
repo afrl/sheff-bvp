@@ -52,7 +52,6 @@ namespace fea_analysis
         /// Initialize the global matrices and vectors for the analysis
 		virtual void set_element_formulations() override;
         virtual void initialize_linear_algebra() override;
-        virtual void apply_boundary_conditions() override {}
         virtual void solve_time_step() override;
         virtual void write_output() override;
         virtual void write_restart_file() override {}

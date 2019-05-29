@@ -19,6 +19,7 @@ namespace fea_analysis
 		/// Called by FeaAnalysis::add_boundary_condition
 		virtual void initialize(const Mesh& mesh,
 			const dof_manager::DofMap& dof_map,
+            const dof_manager::LocalIndex& n_components_for_field,
 			sparse_linear_algebra::ConstraintMatrix& constraint_matrix) = 0;
 	};
 
@@ -56,18 +57,28 @@ namespace fea_analysis
 
 		virtual void initialize(const Mesh& mesh,
 			const dof_manager::DofMap& dof_map,
+            const dof_manager::LocalIndex& n_components_for_field,
 			sparse_linear_algebra::ConstraintMatrix& constraint_matrix) override
 		{
 			selection_.run_selection(mesh);
 
 			auto node_dof_map = dof_map.get_array_of_node_maps();
+            auto n_node_dofs = dof_map.get_array_of_node_n_dofs();
 			for (auto& n_ptr : selection_.get_selection())
 			{
-				auto global_dof = node_dof_map[n_ptr->get_local_number()][opts_.field_component];
+                const auto n_dofs_for_node = n_node_dofs[n_ptr->get_local_number()];
+                const auto n_dofs_to_set = n_dofs_for_node / n_components_for_field;
 
-				auto c = std::make_unique<sparse_linear_algebra::DirchletConstraint>(global_dof);
-				c->set_value(opts_.value);
-				constraint_matrix.add_constraint(std::move(c));
+                for (auto i : utility::range_from_zero(n_dofs_to_set))
+                {
+                    auto offset = i * n_components_for_field + opts_.field_component;
+                    auto global_dof = node_dof_map[n_ptr->get_local_number()][offset];
+
+                    auto c = std::make_unique<sparse_linear_algebra::DirchletConstraint>(global_dof);
+                    c->set_value(opts_.value);
+                    constraint_matrix.add_constraint(std::move(c));
+                }
+				
 			}
 		}
 	};
