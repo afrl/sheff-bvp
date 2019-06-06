@@ -5,6 +5,7 @@
 #include "sparse_linear_algebra/SparseSolver.h"
 
 #include "fea_crack/RXFEMCrack.h"
+#include "fea_crack/CrackManager.h"
 
 #include <memory>
 #include <vector>
@@ -15,7 +16,7 @@ namespace fea_analysis
     class FractureAnalysis : public LinearElasticAnalysis
     {
     public:
-        FractureAnalysis() {}
+        FractureAnalysis();
         virtual ~FractureAnalysis() {}
 
         /// Creates all of the objects needed before solve_time_steps can be called
@@ -25,7 +26,7 @@ namespace fea_analysis
 
     protected:
         fea_crack::RXFEMCrack::ElementAdjacencyList adjacency_list_;
-        std::vector<std::unique_ptr<fea_crack::RXFEMCrack>> cracks_;
+        fea_crack::CrackManager cracks_;
 
         virtual void solve_time_step() override;
 

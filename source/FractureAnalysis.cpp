@@ -16,6 +16,12 @@
 
 namespace fea_analysis
 {
+    FractureAnalysis::FractureAnalysis()
+        : cracks_(fea_crack::CrackRepType::LevelSet,
+            *dof_map_, *mesh_, adjacency_list_)
+    {
+    }
+
     void FractureAnalysis::setup_analysis()
     {
         LinearElasticAnalysis::setup_analysis();
@@ -28,9 +34,7 @@ namespace fea_analysis
         // Initiate all of the cracks
         for (auto i : utility::indices(initiation_points))
         {
-            auto new_crack = std::make_unique<fea_crack::RXFEMCrack>(
-                i, fea_crack::CrackRepType::LevelSet, *dof_map_, *mesh_, adjacency_list_);
-            cracks_.push_back(std::move(new_crack));
+            auto& new_crack = cracks_.add_crack();
             auto initial_element_ptr = flex_mesh::find_element_with_point(*mesh_, initiation_points[i]);
             if (!initial_element_ptr)
             {
@@ -40,7 +44,7 @@ namespace fea_analysis
             auto& direction_criteria = initial_element_ptr->get_direction_criterion();
             simple_math::VoigtVector zero_stress = simple_math::VoigtVector::Zero(6);
             auto crack_normal = direction_criteria.eval(i, initiation_points[i], zero_stress);
-            cracks_.back()->initiate(initial_element_ptr, 0, initiation_points[i], crack_normal);
+            new_crack.initiate(initial_element_ptr, 0, initiation_points[i], crack_normal);
 
             //cracks.back()->write_vtk("./", 0);
         }
@@ -50,7 +54,7 @@ namespace fea_analysis
         auto element_num_dofs = dof_map_->get_array_of_element_n_dofs();
         for (auto& crack : cracks_)
         {
-            auto& crack_state = crack->get_crack_state();
+            auto& crack_state = crack.get_crack_state();
             while (!crack_state.get_enrichments_at_front().empty())
             {
                 std::vector<fea_crack::CrackState::EnrichmentAtFront*> enrichments_at_front_to_grow;
@@ -83,7 +87,7 @@ namespace fea_analysis
                         solution_of_ahead_of_tip_elements.back().setZero();
                     }
 
-                    crack->grow_crack_front(*enrichment_at_front_to_grow,
+                    crack.grow_crack_front(*enrichment_at_front_to_grow,
                         solution_of_ahead_of_tip_elements);
                 }
                 //crack->write_vtk("./", growth_step);
@@ -93,7 +97,7 @@ namespace fea_analysis
 
         for (auto& crack : cracks_)
         {
-            crack->write_vtk("./", 0);
+            crack.write_vtk("./", 0);
         }
     }
 
@@ -223,11 +227,8 @@ namespace fea_analysis
                 auto initiation_result = elastic_formulation->eval_initiation_criterion();
                 if (initiation_result.criterion_satisified)
                 {
-                    auto new_crack = std::unique_ptr<fea_crack::RXFEMCrack>(
-                        new fea_crack::RXFEMCrack(cracks_.size(), fea_crack::CrackRepType::LevelSet,
-                            *dof_map_, *mesh_, adjacency_list_));
-                    new_crack->initiate(e_ptr.get(), 0, initiation_result.point, initiation_result.crack_plane_normal);
-                    cracks_.push_back(std::move(new_crack));
+                    auto& new_crack = cracks_.add_crack();
+                    new_crack.initiate(e_ptr.get(), 0, initiation_result.point, initiation_result.crack_plane_normal);
                     successful = true;
                 }
             }
@@ -241,11 +242,8 @@ namespace fea_analysis
                     auto& initiation_result = initiation_results[i];
                     if (initiation_result.criterion_satisified)
                     {
-                        auto new_crack = std::unique_ptr<fea_crack::RXFEMCrack>(
-                            new fea_crack::RXFEMCrack(cracks_.size(), fea_crack::CrackRepType::LevelSet,
-                                *dof_map_, *mesh_, adjacency_list_));
-                        new_crack->initiate(e_ptr.get(), i, initiation_result.point, initiation_result.crack_plane_normal);
-                        cracks_.push_back(std::move(new_crack));
+                        auto& new_crack = cracks_.add_crack();
+                        new_crack.initiate(e_ptr.get(), i, initiation_result.point, initiation_result.crack_plane_normal);
                         successful = true;
                     }
                 }
