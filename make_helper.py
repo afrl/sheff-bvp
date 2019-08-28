@@ -479,7 +479,7 @@ def config(opts, selected_modules_dirs, specialized_options = []):
                     print(fin.read()) 
             print_color("===ERROR during configuration", "red")
 
-def build(opts, selected_modules_dirs):
+def build( opts, selected_modules_dirs ):
     for module_dir in selected_modules_dirs:
         os.chdir(module_dir.build_dir)
 
@@ -489,7 +489,12 @@ def build(opts, selected_modules_dirs):
             log = " > build.log 2>&1"
 
         print_color("Building---------------" + module_dir.name, "blue")
-        cmd = mod_for_os('cmake --build . --target install -j ' + str(opts.n_jobs) + ' ' + log)
+
+        vflag = ""
+        if( opts.verbose ):
+            vflag = "-v "
+
+        cmd = mod_for_os( 'cmake --build . --target install -j ' + str( opts.n_jobs ) + ' ' + vflag + log )
 
         if (opts.print_cmd):
             print_color(cmd, "cyan")
