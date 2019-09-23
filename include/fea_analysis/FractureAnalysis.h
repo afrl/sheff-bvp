@@ -4,8 +4,8 @@
 #include "sparse_linear_algebra/Vector.h"
 #include "sparse_linear_algebra/SparseSolver.h"
 
-#include "fea_crack/RXFEMCrack.h"
-#include "fea_crack/CrackManager.h"
+#include "fea_crack/XFEMEnrichmentSurface.h"
+#include "fea_crack/EnrichmentSurfaceManager.h"
 
 #include <memory>
 #include <vector>
@@ -25,8 +25,8 @@ namespace fea_analysis
         void insert_precracks(const std::vector<simple_math::Point>& initiation_points);
 
     protected:
-        fea_crack::RXFEMCrack::ElementAdjacencyList adjacency_list_;
-        fea_crack::CrackManager cracks_;
+        fea_crack::ElementAdjacencyList adjacency_list_;
+        std::unique_ptr<fea_crack::EnrichmentSurfaceManager> enrichment_surfaces_;
 
         virtual void solve_time_step() override;
 

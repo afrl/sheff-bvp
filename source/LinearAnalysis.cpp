@@ -153,7 +153,8 @@ namespace fea_analysis
         }
 
         // TODO move this to assembler?
-        finite_element::ElementWorkspace element_workspace;
+        std::unique_ptr<finite_element::ElementWorkspace> element_workspace_ptr
+            = std::make_unique<finite_element::ElementWorkspace>();
         simple_math::GeneralVector elem_solution_vector;
         for (auto& e_ptr : mesh_->elements())
         {
@@ -161,7 +162,7 @@ namespace fea_analysis
             elem_solution_vector = gl_displacement_->get_element_part(e_ptr->get_local_number());
 
             // This should be separated out in the future, but for now provide the workspace
-            e_ptr->set_workspace(&element_workspace);
+            e_ptr->set_workspace(element_workspace_ptr.get());
 
             // Start calculation block
             e_ptr->start_calculations(elem_solution_vector);
