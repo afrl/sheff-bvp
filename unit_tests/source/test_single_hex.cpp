@@ -60,6 +60,7 @@ int main(int argc, char ** argv)
     analysis.add_boundary_condition(std::move(fix_v_at_y_neg_1));
     analysis.add_boundary_condition(std::move(fix_w_at_z_neg_1));
 	analysis.add_boundary_condition(std::move(fix_u_at_x_pos_1));
+    analysis.setup_analysis();
 	analysis.solve_time_steps();
 
 	return 0;

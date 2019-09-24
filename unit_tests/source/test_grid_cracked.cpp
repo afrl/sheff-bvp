@@ -21,8 +21,8 @@ int main(int argc, char ** argv)
     }
 
     // Creates a NxNxN grid from -1 to 1
-    auto mesh_ptr = std::make_unique<fea_crack::RXFEMCrack::Mesh>();
-    *mesh_ptr = flex_mesh::make_grid<fea_crack::RXFEMCrack::Mesh>(
+    auto mesh_ptr = std::make_unique<Mesh>();
+    *mesh_ptr = flex_mesh::make_grid<Mesh>(
         grid_offsets, grid_offsets, { 0, 0.2, 0.4 }, false);
 
 	// Create a constitutive relation

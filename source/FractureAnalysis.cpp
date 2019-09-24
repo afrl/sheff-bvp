@@ -10,7 +10,7 @@
 #include "finite_element/elasticity/InfinitesimalStrain.h"
 #include "finite_element/damage/XFEMFormulation.h"
 
-#include "fea_crack/FeaCrackUtils.h"
+//#include "fea_crack/FeaCrackUtils.h"
 
 #include "sparse_linear_algebra/Factory.h"
 
@@ -27,9 +27,22 @@ namespace fea_analysis
         LinearElasticAnalysis::setup_analysis();
         adjacency_list_.initialize(*mesh_);
         assembler_->set_element_workspaces();
+
+        // Create the callback for the fea_crack module to get the element solution
+        // vector when evaluating the direction criteria.
+        fea_crack::GetElementSolutionCallback get_element_solution_cb =
+        [gl_displacement = gl_displacement_.get()](const Element& element) -> simple_math::GeneralVector
+        {
+            return gl_displacement->get_element_part(element.get_local_number());
+        };
+
         enrichment_surfaces_ = std::make_unique<fea_crack::EnrichmentSurfaceManager>(
             fea_crack::RepresentationType::LevelSet,
-            *dof_map_, *mesh_, adjacency_list_);
+            *mesh_,
+            adjacency_list_,
+            get_element_solution_cb,
+            *dof_map_);
+
     }
 
     void FractureAnalysis::insert_precracks(const std::vector<simple_math::Point>& initiation_points)
@@ -37,7 +50,7 @@ namespace fea_analysis
         // Initiate all of the cracks
         for (auto i : utility::indices(initiation_points))
         {
-            auto& new_crack = enrichment_surfaces_->add_enrichment_surface();
+            auto new_crack_ptr = enrichment_surfaces_->add_enrichment_surface();
             auto initial_element_ptr = flex_mesh::find_element_with_point(*mesh_, initiation_points[i]);
             if (!initial_element_ptr)
             {
@@ -47,7 +60,7 @@ namespace fea_analysis
             auto& direction_criteria = initial_element_ptr->get_direction_criterion();
             simple_math::VoigtVector zero_stress = simple_math::VoigtVector::Zero(6);
             auto crack_normal = direction_criteria.eval(i, initiation_points[i], zero_stress);
-            new_crack.initiate(initial_element_ptr, 0, initiation_points[i], crack_normal);
+            new_crack_ptr->initiate(*initial_element_ptr, 0, initiation_points[i], crack_normal);
 
             //cracks.back()->write_vtk("./", 0);
         }
@@ -57,11 +70,12 @@ namespace fea_analysis
         auto element_num_dofs = dof_map_->get_array_of_element_n_dofs();
         for (auto& crack : *enrichment_surfaces_)
         {
-            auto& crack_state = crack.get_crack_state();
-            while (!crack_state.get_enrichments_at_front().empty())
+            auto& crack_state = crack.get_representation().get_state();
+            auto& enrichments_at_front = crack.get_enrichments_at_front();
+            while (!enrichments_at_front.empty())
             {
-                std::vector<fea_crack::EnrichmentSurfaceState::EnrichmentAtFront*> enrichments_at_front_to_grow;
-                for (auto& enrichment_at_front : crack_state.get_enrichments_at_front())
+                std::vector<fea_crack::EnrichmentAtFront*> enrichments_at_front_to_grow;
+                for (auto& enrichment_at_front : enrichments_at_front)
                 {
                     auto element_ptr = enrichment_at_front->get_enrichment()->get_element();
                     auto& criterion = element_ptr->get_propagation_criterion();
@@ -80,18 +94,12 @@ namespace fea_analysis
 
                 for (auto& enrichment_at_front_to_grow : enrichments_at_front_to_grow)
                 {
-                    std::vector<fea_crack::LeafDofInformation> leaves_to_grow_into;
-                    std::vector<simple_math::GeneralVector> solution_of_ahead_of_tip_elements;
-                    auto& elements_ahead_of_tip = enrichment_at_front_to_grow->get_adjacent_elements_ahead_of_front();
-                    for (auto& element_ahead_of_tip : elements_ahead_of_tip)
-                    {
-                        auto ahead_of_tip_element_index = element_ahead_of_tip->get_element()->get_local_number();
-                        solution_of_ahead_of_tip_elements.emplace_back(element_num_dofs[ahead_of_tip_element_index]);
-                        solution_of_ahead_of_tip_elements.back().setZero();
-                    }
+                    auto search_result = crack.search_ahead_of_front(
+                        *enrichment_at_front_to_grow);
 
-                    crack.grow_crack_front(*enrichment_at_front_to_grow,
-                        solution_of_ahead_of_tip_elements);
+                    crack.grow_crack_front_into_all_leaves(
+                        *enrichment_at_front_to_grow,
+                        search_result);
                 }
                 //crack->write_vtk("./", growth_step);
                 growth_step++;
@@ -167,20 +175,22 @@ namespace fea_analysis
         {
             auto element_matrix = fe.get_formulation().get_element_matrix();
 
-            std::string output_path = "ElementStiffness_" + std::to_string(fe.get_global_number()) + ".txt";
-            std::ofstream output_stream(output_path);
-            output_stream << element_matrix.str() << std::endl;
-            output_stream.close();
+            //std::string output_path = "ElementStiffness_" + std::to_string(fe.get_global_number()) + ".txt";
+            //std::ofstream output_stream(output_path);
+            //output_stream << element_matrix.str() << std::endl;
+            //output_stream.close();
 
             return element_matrix;
         });
 
+        /*
         {
             std::string output_path = "DoFMaps.txt";
             std::ofstream output_stream(output_path);
             output_stream << dof_map_->str() << std::endl;
             output_stream.close();
         }
+        */
 
         // Queue assembly of the global vector containing RHS terms pertaining
         // to eigenstrains (such as thermal strain, plastic strain, etc.)
@@ -208,9 +218,9 @@ namespace fea_analysis
             gl_displacement_);
 
         // Debug
-        auto solution = gl_displacement_->get_as_eigen_vector();
-        fea_crack::write_enrichment_surfaces_vtk_tmp(
-            *mesh_, *dof_map_, "Solution.vtk", solution);
+        //auto solution = gl_displacement_->get_as_eigen_vector();
+        //fea_crack::write_enrichment_surfaces_vtk_tmp(
+        //    *mesh_, *dof_map_, "Solution.vtk", solution);
     }
 
     bool FractureAnalysis::try_to_initiate_cracks()
@@ -236,23 +246,31 @@ namespace fea_analysis
                 auto initiation_result = elastic_formulation->eval_initiation_criterion();
                 if (initiation_result.criterion_satisified)
                 {
-                    auto& new_crack = enrichment_surfaces_->add_enrichment_surface();
-                    new_crack.initiate(e_ptr.get(), 0, initiation_result.point, initiation_result.crack_plane_normal);
+                    auto new_crack_ptr = enrichment_surfaces_->add_enrichment_surface();
+                    new_crack_ptr->initiate(
+                        *e_ptr,
+                        0,
+                        initiation_result.point,
+                        initiation_result.crack_plane_normal);
                     successful = true;
                 }
             }
 
-            auto rxfem_formulation = dynamic_cast<finite_element::XFEMFormulation*>(&formulation);
-            if (rxfem_formulation)
+            auto xfem_formulation = dynamic_cast<finite_element::XFEMFormulation*>(&formulation);
+            if (xfem_formulation)
             {
-                auto initiation_results = rxfem_formulation->eval_initiation_criterion();
+                auto initiation_results = xfem_formulation->eval_initiation_criterion();
                 for (auto i : utility::indices(initiation_results))
                 {
                     auto& initiation_result = initiation_results[i];
                     if (initiation_result.criterion_satisified)
                     {
-                        auto& new_crack = enrichment_surfaces_->add_enrichment_surface();
-                        new_crack.initiate(e_ptr.get(), i, initiation_result.point, initiation_result.crack_plane_normal);
+                        auto new_crack_ptr = enrichment_surfaces_->add_enrichment_surface();
+                        new_crack_ptr->initiate(
+                            *e_ptr,
+                            i,
+                            initiation_result.point,
+                            initiation_result.crack_plane_normal);
                         successful = true;
                     }
                 }

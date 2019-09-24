@@ -4,7 +4,7 @@
 #include "sparse_linear_algebra/Vector.h"
 #include "sparse_linear_algebra/SparseSolver.h"
 
-#include "fea_crack/XFEMEnrichmentSurface.h"
+#include "fea_crack/EnrichmentSurface.h"
 #include "fea_crack/EnrichmentSurfaceManager.h"
 
 #include <memory>
