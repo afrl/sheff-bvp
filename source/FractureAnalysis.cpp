@@ -10,7 +10,7 @@
 #include "finite_element/elasticity/InfinitesimalStrain.h"
 #include "finite_element/damage/RXFEMFormulation.h"
 
-#include "sparse_linear_algebra/Factory.h"
+#include "sparse_linear_algebra/LinAlgFactory.h"
 
 #include <memory>
 

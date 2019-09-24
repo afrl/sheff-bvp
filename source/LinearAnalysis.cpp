@@ -4,7 +4,7 @@
 #include "finite_element/BaseFormulation.h"
 #include "finite_element/elasticity/InfinitesimalStrain.h"
 
-#include "sparse_linear_algebra/Factory.h"
+#include "sparse_linear_algebra/LinAlgFactory.h"
 
 #include "output/Output.h"
 #include "output/OutputFeaAnalysisHelpers.h"
@@ -186,4 +186,4 @@ namespace fea_analysis
         writer.close();
         ascii_writer_.close();
     }
-}
+} // end namespace fea_analysis
