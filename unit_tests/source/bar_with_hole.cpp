@@ -6,6 +6,8 @@
 #include "constitutive/elasticity/LinearElasticityConstitutiveRelation.h"
 #include "fea_io/common/MPIUtils.h"
 
+#include "unit_test_helper.h"
+
 using namespace fea_analysis;
 
 int main(int argc, char ** argv)
@@ -43,13 +45,14 @@ int main(int argc, char ** argv)
     auto fix_u_at_x_pos_1 = std::unique_ptr<DirchletBC>(new DirchletBC(x_pos_1_selection, { 0 , 10 }));
 
     LinearElasticAnalysis analysis;
-    analysis.set_input_meta("bar_with_hole");
+    analysis.set_input_meta(get_test_data_filepath("bar_with_hole"));
     analysis.add_constitutive_relation("IsotropicMaterial", std::move(constitutive_relation_ptr));
     analysis.set_elements_constitutive_relation(fea_analysis::ElementSelection(), "IsotropicMaterial");
     analysis.add_boundary_condition(std::move(fix_u_at_x_neg_1));
     analysis.add_boundary_condition(std::move(fix_v_at_x_neg_1));
     analysis.add_boundary_condition(std::move(fix_w_at_x_neg_1));
     analysis.add_boundary_condition(std::move(fix_u_at_x_pos_1));
+    analysis.setup_analysis();
     analysis.solve_time_steps();
 
     return 0;

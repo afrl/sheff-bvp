@@ -4,7 +4,7 @@
         "name": "BarWithHole",
         "timesteps": [
             {
-                "mesh_path": "BarWithHole",
+                "mesh_path": "bar_with_hole",
                 "time": 0.0,
                 "time_step_id": 0
             }

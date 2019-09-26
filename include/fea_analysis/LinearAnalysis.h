@@ -7,6 +7,8 @@
 #include <memory>
 #include <vector>
 
+#if 0
+
 namespace output
 {
     template<typename T>
@@ -22,16 +24,21 @@ namespace output
     template<>
     LinearElasticField from_string(const std::string & str)
     {
-        if (utility::istr_is_equal(str, "Displacement"))
+        if (utility::istr_is_equal(str, "Displacement")) {
             return LinearElasticField::Displacement;
-        else if (utility::istr_is_equal(str, "Stress"))
+        }
+        else if (utility::istr_is_equal(str, "Stress")) {
             return LinearElasticField::Stress;
-        else if (utility::istr_is_equal(str, "Strain"))
+        }
+        else if (utility::istr_is_equal(str, "Strain")) {
             return LinearElasticField::Strain;
-        else
+        }
+        else {
             throw _UTIL_MSG_EXCEPT("Cannot convert from " + str);
+        }
     }
 }
+#endif
 
 namespace fea_analysis
 {
