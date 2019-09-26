@@ -12,7 +12,7 @@
 
 //#include "fea_crack/FeaCrackUtils.h"
 
-#include "sparse_linear_algebra/Factory.h"
+#include "sparse_linear_algebra/LinAlgFactory.h"
 
 #include <memory>
 
