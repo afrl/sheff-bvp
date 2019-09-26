@@ -8,7 +8,7 @@
 file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/unit_tests/Output)
 set(TEST_WORKDIR ${CMAKE_BINARY_DIR}/unit_tests/Output)
 
-file(GLOB_RECURSE _unit_tests "${CMAKE_CURRENT_SOURCE_DIR}" "*.cpp")
+file(GLOB_RECURSE _unit_tests "${CMAKE_CURRENT_SOURCE_DIR}/source/*.cpp")
 set(test_list, "")
 
 foreach(_test ${_unit_tests}) 

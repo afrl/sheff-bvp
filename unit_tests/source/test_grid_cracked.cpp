@@ -12,6 +12,7 @@ using namespace fea_analysis;
 int main(int argc, char ** argv)
 {
     fea_io::MPIUtils::init(&argc, &argv);
+    utility::MPIUtils::init(&argc, &argv);
 
 	auto N = 9;
     std::vector<double> grid_offsets(N);

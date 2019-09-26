@@ -13,6 +13,7 @@ using namespace fea_analysis;
 int main(int argc, char ** argv)
 {
     fea_io::MPIUtils::init(&argc, &argv);
+    utility::MPIUtils::init(&argc, &argv);
 
     // Create a constitutive relation
     const double E = 1e9;
