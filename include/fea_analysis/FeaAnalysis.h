@@ -56,6 +56,7 @@ namespace fea_analysis
 		/// interface is generalized to have multiple constraint matrices, then this will need to be moved.
 		/// Note: this is still expected to be setup in initialize_linear_algebra in the derived classes.
 		std::unique_ptr<sparse_linear_algebra::ConstraintMatrix> gl_constraint_matrix_;
+        std::unique_ptr<sparse_linear_algebra::DofMapReferences> dof_refs_;
 
         output::OutputFlagCache output_flag_cache_;
         std::vector<std::unique_ptr<output::OutputFlag>> output_flags_;
@@ -68,18 +69,5 @@ namespace fea_analysis
         virtual void solve_time_step() = 0;
         virtual void write_output() = 0;
         virtual void write_restart_file() = 0;
-
-        template<typename GlobalContainer>
-        void initialize_container(GlobalContainer& gl_container);
     };
-    template<typename GlobalContainer>
-    inline void FeaAnalysis::initialize_container(GlobalContainer & gl_container)
-    {
-        gl_container.set_local_global_dof_map(
-            dof_map_->get_array_of_element_maps(),
-            dof_map_->get_array_of_element_n_dofs(),
-            static_cast<flex_mesh::LocalIndex>(mesh_->elements().size()),
-            dof_map_->get_n_local_dofs(),
-            dof_map_->get_n_global_dofs());
-    }
 }

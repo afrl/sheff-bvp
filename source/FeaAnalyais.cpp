@@ -86,11 +86,6 @@ namespace fea_analysis
         } while (time_step_manager_->next_time_step());
     }
 
-	void FeaAnalysis::initialize_linear_algebra()
-	{
-
-	}
-
     void FeaAnalysis::apply_boundary_conditions()
     {
         for (auto& bc : boundary_conditions_)

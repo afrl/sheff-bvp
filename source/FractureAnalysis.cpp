@@ -47,6 +47,8 @@ namespace fea_analysis
 
     void FractureAnalysis::insert_precracks(const std::vector<simple_math::Point>& initiation_points)
     {
+        dof_map_->start_enrichment_phase();
+
         // Initiate all of the cracks
         for (auto i : utility::indices(initiation_points))
         {
@@ -67,7 +69,6 @@ namespace fea_analysis
 
         // Grow all the cracks one element until they can no longer grow
         int growth_step = 1;
-        auto element_num_dofs = dof_map_->get_array_of_element_n_dofs();
         for (auto& crack : *enrichment_surfaces_)
         {
             auto& crack_state = crack.get_representation().get_state();
@@ -110,27 +111,33 @@ namespace fea_analysis
         {
             crack.write_vtk("./", 0, 0);
         }
+
+        // Change phase to static phase
+        dof_map_->start_renumber_phase();
+
+        auto& renumbering_new_rank_to_old_rank_map =
+            dof_map_->get_renumbering_new_rank_to_old_rank_map();
+        auto& renumbering_old_rank_to_global_map =
+            dof_map_->get_renumbering_old_rank_to_global_map();
+
+        gl_stiffness_->renumber_dofs(0,
+            renumbering_old_rank_to_global_map,
+            renumbering_new_rank_to_old_rank_map);
+        gl_displacement_->renumber_dofs(0,
+            renumbering_old_rank_to_global_map,
+            renumbering_new_rank_to_old_rank_map);
+        gl_rhs_->renumber_dofs(0,
+            renumbering_old_rank_to_global_map,
+            renumbering_new_rank_to_old_rank_map);
+        gl_eigenstrain_force_->renumber_dofs(0,
+            renumbering_old_rank_to_global_map,
+            renumbering_new_rank_to_old_rank_map);
+
+        dof_map_->end_renumber_phase();
     }
 
     void FractureAnalysis::solve_time_step()
     {
-        gl_stiffness_->update_local_global_dof_map(
-            mesh_->elements().size(),
-            dof_map_->get_n_local_dofs(),
-            dof_map_->get_n_global_dofs());
-        gl_displacement_->update_local_global_dof_map(
-            mesh_->elements().size(),
-            dof_map_->get_n_local_dofs(),
-            dof_map_->get_n_global_dofs());
-        gl_eigenstrain_force_->update_local_global_dof_map(
-            mesh_->elements().size(),
-            dof_map_->get_n_local_dofs(),
-            dof_map_->get_n_global_dofs());
-        gl_rhs_->update_local_global_dof_map(
-            mesh_->elements().size(),
-            dof_map_->get_n_local_dofs(),
-            dof_map_->get_n_global_dofs());
-
         apply_boundary_conditions();
 
         solve_equillibrium_step();

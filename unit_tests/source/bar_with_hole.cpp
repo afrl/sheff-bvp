@@ -5,6 +5,7 @@
 #include "flex_mesh/algorithms/Search.h"
 #include "constitutive/elasticity/LinearElasticityConstitutiveRelation.h"
 #include "fea_io/common/MPIUtils.h"
+#include "sparse_linear_algebra/LinAlgFactory.h"
 
 #include "unit_test_helper.h"
 
@@ -14,6 +15,8 @@ int main(int argc, char ** argv)
 {
     fea_io::MPIUtils::init(&argc, &argv);
     utility::MPIUtils::init(&argc, &argv);
+    sparse_linear_algebra::LinAlgFactory::init(
+        sparse_linear_algebra::LinAlgFactory::LinAlgBackend::MKL, &argc, &argv);
 
     // Create a constitutive relation
     const double E = 1e9;
@@ -34,16 +37,16 @@ int main(int argc, char ** argv)
         [](const fea_analysis::Node& n) -> bool {
         return n.x() == 0.0;
     });
-    auto fix_u_at_x_neg_1 = std::unique_ptr<DirchletBC>(new DirchletBC(x_neg_1_selection, { 0 , 0 }));
-    auto fix_v_at_x_neg_1 = std::unique_ptr<DirchletBC>(new DirchletBC(x_neg_1_selection, { 1 , 0 }));
-    auto fix_w_at_x_neg_1 = std::unique_ptr<DirchletBC>(new DirchletBC(x_neg_1_selection, { 2 , 0 }));
+    auto fix_u_at_x_neg_1 = std::unique_ptr<DirichletBC>(new DirichletBC(x_neg_1_selection, { 0 , 0 }));
+    auto fix_v_at_x_neg_1 = std::unique_ptr<DirichletBC>(new DirichletBC(x_neg_1_selection, { 1 , 0 }));
+    auto fix_w_at_x_neg_1 = std::unique_ptr<DirichletBC>(new DirichletBC(x_neg_1_selection, { 2 , 0 }));
     // Specify u along the x = 1 side
     NodeSelection x_pos_1_selection;
     x_pos_1_selection.add_criteria(
         [](const fea_analysis::Node& n) -> bool {
         return n.x() == 100.0;
     });
-    auto fix_u_at_x_pos_1 = std::unique_ptr<DirchletBC>(new DirchletBC(x_pos_1_selection, { 0 , 10 }));
+    auto fix_u_at_x_pos_1 = std::unique_ptr<DirichletBC>(new DirichletBC(x_pos_1_selection, { 0 , 10 }));
 
     LinearElasticAnalysis analysis;
     analysis.set_input_meta(get_test_data_filepath("bar_with_hole"));
