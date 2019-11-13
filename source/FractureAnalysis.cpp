@@ -78,10 +78,10 @@ namespace fea_analysis
                 std::vector<fea_crack::EnrichmentAtFront*> enrichments_at_front_to_grow;
                 for (auto& enrichment_at_front : enrichments_at_front)
                 {
-                    auto element_ptr = enrichment_at_front->get_enrichment()->get_element();
-                    auto& criterion = element_ptr->get_propagation_criterion();
+                    auto& element = enrichment_at_front->get_enrichment().get_element();
+                    auto& criterion = element.get_propagation_criterion();
                     if (criterion.eval(crack_state.get_enrichment_surface_id(),
-                        element_ptr->get_mean_coordinate(), simple_math::Vector3D::Zero()))
+                        element.get_mean_coordinate(), simple_math::Vector3D::Zero()))
                     {
                         enrichments_at_front_to_grow.push_back(enrichment_at_front.get());
                     }
