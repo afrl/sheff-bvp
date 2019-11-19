@@ -3,6 +3,7 @@
 #include "flex_mesh/mesh/MeshPartition.h"
 #include "flex_mesh/node/Node.h"
 #include "flex_mesh/algorithms/Selection.h"
+#include "finite_element/FiniteElement.h"
 
 namespace fea_analysis
 {

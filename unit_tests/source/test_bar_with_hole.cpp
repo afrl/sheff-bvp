@@ -1,13 +1,12 @@
-#include "fea_analysis/LinearAnalysis.h"
+#include "UnitTestHelpers.h"
 
+#include "fea_analysis/LinearAnalysis.h"
 #include "flex_mesh/algorithms/UnitElements.h"
 #include "flex_mesh/algorithms/IO.h"
 #include "flex_mesh/algorithms/Search.h"
 #include "constitutive/elasticity/LinearElasticityConstitutiveRelation.h"
 #include "fea_io/common/MPIUtils.h"
 #include "sparse_linear_algebra/LinAlgFactory.h"
-
-#include "unit_test_helper.h"
 
 using namespace fea_analysis;
 
@@ -17,6 +16,7 @@ int main(int argc, char ** argv)
     utility::MPIUtils::init(&argc, &argv);
     sparse_linear_algebra::LinAlgFactory::init(
         sparse_linear_algebra::LinAlgFactory::LinAlgBackend::MKL, &argc, &argv);
+    init_output_directory(__FILE__);
 
     // Create a constitutive relation
     const double E = 1e9;
@@ -49,7 +49,10 @@ int main(int argc, char ** argv)
     auto fix_u_at_x_pos_1 = std::unique_ptr<DirichletBC>(new DirichletBC(x_pos_1_selection, { 0 , 10 }));
 
     LinearElasticAnalysis analysis;
-    analysis.set_input_meta(get_test_data_filepath("bar_with_hole"));
+    analysis.set_input(
+        "",
+        get_test_data_filepath("bar_with_hole"),
+        (get_output_directory(__FILE__) / "output").string());
     analysis.add_constitutive_relation("IsotropicMaterial", std::move(constitutive_relation_ptr));
     analysis.set_elements_constitutive_relation(fea_analysis::ElementSelection(), "IsotropicMaterial");
     analysis.add_boundary_condition(std::move(fix_u_at_x_neg_1));

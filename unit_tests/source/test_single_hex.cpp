@@ -1,5 +1,6 @@
-#include "fea_analysis/LinearAnalysis.h"
+#include "UnitTestHelpers.h"
 
+#include "fea_analysis/LinearAnalysis.h"
 #include "flex_mesh/algorithms/UnitElements.h"
 #include "constitutive/elasticity/LinearElasticityConstitutiveRelation.h"
 #include "fea_io/common/MPIUtils.h"
@@ -14,7 +15,7 @@ int main(int argc, char ** argv)
     sparse_linear_algebra::LinAlgFactory::init(
         sparse_linear_algebra::LinAlgFactory::LinAlgBackend::MKL, &argc, &argv);
 
-    // Use a single linear hex for now
+    // Use a single linear hex
     auto mesh_ptr = flex_mesh::get_unit_linear_hex_ptr<fea_analysis::Mesh>();
 
     // Create a constitutive relation
@@ -26,44 +27,21 @@ int main(int argc, char ** argv)
     auto constitutive_relation_ptr = std::make_unique<constitutive::LinearElasticityConstitutiveRelation>();
     constitutive_relation_ptr->set_elastic_properties(std::move(properties));
 
-    // Create the boundary conditions
-    // Fix u along the x = -1 side
-    NodeSelection x_neg_1_selection;
-    x_neg_1_selection.add_criteria(
-                                   [](const fea_analysis::Node& n) -> bool {
-                                       return n.x() == -1.0;
-                                   });
-    auto fix_u_at_x_neg_1 = std::unique_ptr<DirichletBC>(new DirichletBC(x_neg_1_selection, { 0 , 0 }));
-    // Fix v along the y = -1 side
-    NodeSelection y_neg_1_selection;
-    y_neg_1_selection.add_criteria(
-                                   [](const fea_analysis::Node& n) -> bool {
-                                       return n.y() == -1.0;
-                                   });
-    auto fix_v_at_y_neg_1 = std::unique_ptr<DirichletBC>(new DirichletBC(y_neg_1_selection, { 1 , 0 }));
-    // Fix w along the z = -1 side
-    NodeSelection z_neg_1_selection;
-    z_neg_1_selection.add_criteria(
-                                   [](const fea_analysis::Node& n) -> bool {
-                                       return n.z() == -1.0;
-                                   });
-    auto fix_w_at_z_neg_1 = std::unique_ptr<DirichletBC>(new DirichletBC(z_neg_1_selection, { 2 , 0 }));
-    // Specify u along the x = 1 side
-    NodeSelection x_pos_1_selection;
-    x_pos_1_selection.add_criteria(
-                                   [](const fea_analysis::Node& n) -> bool {
-                                       return n.x() == 1.0;
-                                   });
-    auto fix_u_at_x_pos_1 = std::unique_ptr<DirichletBC>(new DirichletBC(x_pos_1_selection, { 0 , 1 }));
-
     LinearElasticAnalysis analysis;
-    analysis.set_mesh(std::move(mesh_ptr));
-    analysis.add_constitutive_relation("IsotropicMaterial", std::move(constitutive_relation_ptr));
-    analysis.set_elements_constitutive_relation(fea_analysis::ElementSelection(), "IsotropicMaterial");
-    analysis.add_boundary_condition(std::move(fix_u_at_x_neg_1));
-    analysis.add_boundary_condition(std::move(fix_v_at_y_neg_1));
-    analysis.add_boundary_condition(std::move(fix_w_at_z_neg_1));
-    analysis.add_boundary_condition(std::move(fix_u_at_x_pos_1));
+    analysis.set_input(
+        std::move(mesh_ptr),
+        get_test_name(__FILE__),
+        (get_output_directory(__FILE__) / "output").string());
+    analysis.add_constitutive_relation(
+        "IsotropicMaterial",
+        std::move(constitutive_relation_ptr));
+    analysis.set_elements_constitutive_relation(
+        fea_analysis::ElementSelection(),
+        "IsotropicMaterial");
+    for (auto& bc : get_unit_tension_x_bcs())
+    {
+        analysis.add_boundary_condition(std::move(bc));
+    }
     analysis.setup_analysis();
     analysis.solve_time_steps();
 

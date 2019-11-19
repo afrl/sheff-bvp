@@ -107,95 +107,124 @@ namespace fea_analysis
 
     void LinearElasticAnalysis::write_output()
     {
-        // Create a writer for this time step
-        auto data_filepath = output_meta_.add_data_path(0, 0, "Data");
-        fea_io::DataWriter<flex_mesh::GlobalIndex, flex_mesh::LocalIndex, flex_mesh::FloatType> writer;
+        auto& output_meta_info = output_meta_.get_analysis_meta();
+        auto& time_step_info = output_meta_.get_time_step(
+            time_step_manager_->get_time_step(),
+            time_step_manager_->get_current_time());
 
-        // DEBUG TODO delete
-        output_flags_.push_back(std::make_unique<output::OutputFlag>("Displacement", "Global", "Node", output_flag_cache_));
-        output_flags_.push_back(std::make_unique<output::OutputFlag>("Stress", "Global", "Element", output_flag_cache_));
-        output_flags_.push_back(std::make_unique<output::OutputFlag>("Strain", "Global", "Element", output_flag_cache_));
-
-        std::vector<output::OutputFlag*> flags_to_be_output;
-        for (auto& flag : output_flags_)
         {
-            if (flag->should_be_output())
+            fea_io::MeshObect mesh_object;
+            mesh_object.type = fea_io::MeshObjectType::Volume;
+            // Note: we can assign the same paths from the input info because
+            // FeaAnalysis::set_input() copies all of the files over to the output directory.
+            mesh_object.mesh_path =
+                output_meta_info.input_info.levels_of_detail[0].mesh_objects[0].mesh_path;
+            mesh_object.group_paths =
+                output_meta_info.input_info.levels_of_detail[0].mesh_objects[0].group_paths;
+            // Use the mesh file name for the name of the data that belongs to the mesh
+            std::string mesh_filename = fs::path(mesh_object.mesh_path).filename().string();
+            // Note: there is an assumption here that the time step directory is the same folder
+            // as the output meta file.  This may need to be generalized.
+            mesh_object.data_paths.push_back(
+                (curr_time_step_dir_.filename() / mesh_filename).generic_string());
+            fs::path output_data_path = curr_time_step_dir_ / mesh_filename;
+            // Update the time step info
+            time_step_info.levels_of_detail.push_back({
+                0, // level
+                fea_io::LODParentRelation::None, // relationship_with_parent
+                { mesh_object } }); // mesh_objects
+
+            // Create a writer for this time step
+            fea_io::DataWriter<flex_mesh::GlobalIndex, flex_mesh::LocalIndex, flex_mesh::FloatType> writer;
+
+            // DEBUG TODO delete
+            output_flags_.push_back(std::make_unique<output::OutputFlag>("Displacement", "Global", "Node", output_flag_cache_));
+            output_flags_.push_back(std::make_unique<output::OutputFlag>("Stress", "Global", "Element", output_flag_cache_));
+            output_flags_.push_back(std::make_unique<output::OutputFlag>("Strain", "Global", "Element", output_flag_cache_));
+
+            std::vector<output::OutputFlag*> flags_to_be_output;
+            for (auto& flag : output_flags_)
             {
-                flags_to_be_output.push_back(flag.get());
+                if (flag->should_be_output())
+                {
+                    flags_to_be_output.push_back(flag.get());
+                }
             }
-        }
 
-        // TODO only update this if the mesh has changed in subsequent writes
-        subcomponent_maps_.update_maps(*mesh_);
+            // TODO only update this if the mesh has changed in subsequent writes
+            subcomponent_maps_.update_maps(*mesh_);
 
-        ascii_writer_.open(output::get_data_file_name() + ".txt");
+            ascii_writer_.open((output_data_path / ".txt").string());
 
-        // Create an output algorithm for each output flag involved in this write
-        auto output_algorithms = output::get_output_algorithms(ascii_writer_, writer,
-            mesh_->get_partition_id(), flags_to_be_output,
-            static_cast<flex_mesh::LocalIndex>(mesh_->nodes().size()), subcomponent_maps_);
+            // Create an output algorithm for each output flag involved in this write
+            auto output_algorithms = output::get_output_algorithms(ascii_writer_, writer,
+                mesh_->get_partition_id(), flags_to_be_output,
+                static_cast<flex_mesh::LocalIndex>(mesh_->nodes().size()), subcomponent_maps_);
 
-        std::vector<fea_io::ArrayInfo> array_infos;
-        for (auto& output_algorithm : output_algorithms)
-        {
-            array_infos.push_back(output_algorithm->get_fea_io_array_info());
-        }
+            std::vector<fea_io::ArrayInfo> array_infos;
+            for (auto& output_algorithm : output_algorithms)
+            {
+                array_infos.push_back(output_algorithm->get_fea_io_array_info());
+            }
 
-        // Create MeshInfo from the mesh
-        auto mesh_info = mesh_->get_fea_io_mesh_info();
-        auto partition_info = mesh_->get_fea_io_partition_info();
+            // Create MeshInfo from the mesh
+            auto mesh_info = mesh_->get_fea_io_mesh_info();
+            auto partition_info = mesh_->get_fea_io_partition_info();
 
-        // Find number of quadrature points
-        flex_mesh::GlobalIndex n_quad_points = 0;
-        for (auto& e_ptr : mesh_->elements())
-        {
-            n_quad_points += e_ptr->get_n_quad_points();
-        }
+            // Find number of quadrature points
+            flex_mesh::GlobalIndex n_quad_points = 0;
+            for (auto& e_ptr : mesh_->elements())
+            {
+                n_quad_points += e_ptr->get_n_quad_points();
+            }
 
-        // Initialize the data writer for this output step
-        writer.initialize(data_filepath,
-            mesh_info, partition_info, n_quad_points, array_infos);
+            // Initialize the data writer for this output step
+            writer.initialize(output_data_path.string(),
+                mesh_info, partition_info, n_quad_points, array_infos);
 
-        auto multi_field_calc = output::get_element_multi_field_calc(output_algorithms);
-
-        for (auto& output_algorithm : output_algorithms)
-        {
-            output_algorithm->pre_loop_step(multi_field_calc);
-        }
-
-        // TODO move this to assembler?
-        std::unique_ptr<finite_element::ElementWorkspace> element_workspace_ptr
-            = std::make_unique<finite_element::ElementWorkspace>();
-        simple_math::GeneralVector elem_solution_vector;
-        for (auto& e_ptr : mesh_->elements())
-        {
-            // Provide the current solution in case the element requries it.
-            elem_solution_vector = gl_displacement_->get_element_part(e_ptr->get_local_number());
-
-            // This should be separated out in the future, but for now provide the workspace
-            e_ptr->set_workspace(element_workspace_ptr.get());
-
-            // Start calculation block
-            e_ptr->start_calculations(elem_solution_vector);
-
-            auto e_number = e_ptr->get_global_number();
-            e_ptr->get_formulation().calculate(multi_field_calc);
-
-            // End calculation block
-            e_ptr->end_calculations();
+            auto multi_field_calc = output::get_element_multi_field_calc(output_algorithms);
 
             for (auto& output_algorithm : output_algorithms)
             {
-                output_algorithm->add_element_contribution(*e_ptr, multi_field_calc);
+                output_algorithm->pre_loop_step(multi_field_calc);
             }
+
+            // TODO move this to assembler?
+            std::unique_ptr<finite_element::ElementWorkspace> element_workspace_ptr
+                = std::make_unique<finite_element::ElementWorkspace>();
+            simple_math::GeneralVector elem_solution_vector;
+            for (auto& e_ptr : mesh_->elements())
+            {
+                // Provide the current solution in case the element requries it.
+                elem_solution_vector = gl_displacement_->get_element_part(e_ptr->get_local_number());
+
+                // This should be separated out in the future, but for now provide the workspace
+                e_ptr->set_workspace(element_workspace_ptr.get());
+
+                // Start calculation block
+                e_ptr->start_calculations(elem_solution_vector);
+
+                auto e_number = e_ptr->get_global_number();
+                e_ptr->get_formulation().calculate(multi_field_calc);
+
+                // End calculation block
+                e_ptr->end_calculations();
+
+                for (auto& output_algorithm : output_algorithms)
+                {
+                    output_algorithm->add_element_contribution(*e_ptr, multi_field_calc);
+                }
+            }
+
+            for (auto& output_algorithm : output_algorithms)
+            {
+                output_algorithm->post_loop_step();
+            }
+
+            writer.close();
+            ascii_writer_.close();
         }
 
-        for (auto& output_algorithm : output_algorithms)
-        {
-            output_algorithm->post_loop_step();
-        }
-
-        writer.close();
-        ascii_writer_.close();
+        output_meta_.update_meta_file();
     }
 } // end namespace fea_analysis

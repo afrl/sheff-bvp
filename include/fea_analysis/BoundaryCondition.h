@@ -2,6 +2,7 @@
 
 #include "Defines.h"
 #include "dof_manager/DofMap.h"
+#include "sparse_linear_algebra/ConstraintMatrix.h"
 
 namespace fea_analysis
 {

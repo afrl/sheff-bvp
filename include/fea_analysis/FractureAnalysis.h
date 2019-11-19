@@ -29,6 +29,7 @@ namespace fea_analysis
         std::unique_ptr<fea_crack::EnrichmentSurfaceManager> enrichment_surfaces_;
 
         virtual void solve_time_step() override;
+        virtual void write_output() override;
 
         void solve_equillibrium_step();
         bool try_to_initiate_cracks();

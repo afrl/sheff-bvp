@@ -2,6 +2,9 @@
 
 #include "flex_mesh/maps/AdjacencyLists.h"
 #include "flex_mesh/algorithms/Search.h"
+#include "flex_mesh/element/PolyhedronElement.h"
+#include "flex_mesh/algorithms/IO.h"
+#include "flex_mesh/algorithms/IOFeaIo.h"
 
 #include "simple_math/Utility.h"
 
@@ -10,9 +13,10 @@
 #include "finite_element/elasticity/InfinitesimalStrain.h"
 #include "finite_element/damage/XFEMFormulation.h"
 
-//#include "fea_crack/FeaCrackUtils.h"
-
 #include "sparse_linear_algebra/LinAlgFactory.h"
+
+#include "output/Output.h"
+#include "output/OutputFeaAnalysisHelpers.h"
 
 #include <memory>
 
@@ -167,6 +171,232 @@ namespace fea_analysis
             }
         }
         */
+    }
+
+    static flex_mesh::MeshPartition<Node, flex_mesh::Element<Node>>
+        extract_enriched_elements(Mesh& original_mesh)
+    {
+        flex_mesh::MeshPartition<Node, flex_mesh::Element<Node>> enriched_elements_mesh;
+        flex_mesh::LocalIndex curr_local_node_i = 0;
+        flex_mesh::LocalIndex curr_local_element_i = 0;
+        for (auto& e_ptr : original_mesh.elements())
+        {
+            if (e_ptr->has_formulation_type<finite_element::XFEMFormulation>())
+            {
+                auto& xfem_form =
+                    static_cast<const finite_element::XFEMFormulation&>(
+                        e_ptr->get_formulation_const());
+                auto tree_traverser = xfem_form.get_tree_traverser();
+                auto& integration_domains = xfem_form.get_integration_domains();
+                auto& points = integration_domains.get_points();
+
+                flex_mesh::NodeX3Matrix node_coords;
+                e_ptr->get_node_coordinates(node_coords);
+
+                for (auto leaf_index : utility::range_from_zero(xfem_form.get_n_leaves()))
+                {
+                    auto leaf_info = tree_traverser.get_leaf(leaf_index);
+                    auto& polyhedron = integration_domains.get_polyhedra()[leaf_info.field_index];
+                    auto point_indices = polyhedron.get_point_indices();
+
+                    // Add points for polyhedra
+                    flex_mesh::Connectivity<Node, Element::ConnSize> nodes_for_points;
+                    std::map<Element::ConnSize, Element::ConnSize> poly_to_facet_point_index_map;
+                    Element::ConnSize curr_facet_index = 0;
+                    for (auto i : point_indices)
+                    {
+                        // The points of the integration domain is in the parametric coordinate
+                        // system, so they need to be transformed to the global for plotting.
+                        auto p = integration_domains.get_points()[i];
+                        auto shape_function_values =
+                            e_ptr->get_shape_function_values(p);
+
+                        simple_math::Point global_p;
+                        for (auto i = 0; i < 3; i++)
+                        {
+                            global_p[i] = shape_function_values.dot(node_coords.col(i));
+                        }
+
+                        nodes_for_points.push_back(
+                            enriched_elements_mesh.add_node_by_coord(global_p));
+                        nodes_for_points.back()->set_local_number(curr_local_node_i++);
+                        poly_to_facet_point_index_map[i] = curr_facet_index;
+                        curr_facet_index++;
+                    }
+
+                    std::vector<utility::DynamicArray<Element::ConnSize, Element::ConnSize>> indices_for_facets;
+                    for (auto& facet : polyhedron.get_facets())
+                    {
+                        indices_for_facets.emplace_back();
+                        indices_for_facets.back().resize(facet.point_indices.size());
+                        auto curr_facet_i = 0;
+                        for (auto i : facet.point_indices)
+                        {
+                            indices_for_facets.back()[curr_facet_i] = poly_to_facet_point_index_map[i];
+                            curr_facet_i++;
+                        }
+                    }
+
+                    auto poly_element = std::make_unique<flex_mesh::PolyhedronElement<Node>>();
+                    poly_element->initialize(nodes_for_points, indices_for_facets);
+                    poly_element->set_local_number(curr_local_element_i++);
+                    poly_element->set_global_number(e_ptr->get_global_number());
+                    poly_element->set_component_id(e_ptr->get_component_id());
+;                   enriched_elements_mesh.elements().add(std::move(poly_element));
+                }
+            }
+        }
+
+        return enriched_elements_mesh;
+    }
+
+    void FractureAnalysis::write_output()
+    {
+        LinearElasticAnalysis::write_output();
+
+        auto& output_meta_info = output_meta_.get_analysis_meta();
+        auto& time_step_info = output_meta_.get_time_step(
+            time_step_manager_->get_time_step(),
+            time_step_manager_->get_current_time());
+
+        if (output_meta_info.levels_of_detail_names.size() == 1)
+        {
+            output_meta_info.levels_of_detail_names.push_back("enriched");
+        }
+
+        // Update the output meta info with the mesh object for the enriched elements
+        fs::path enriched_elements_path_stem = curr_time_step_dir_ / "enriched_elements";
+        // Note: there is an assumption here that the time step directory is the same folder
+        // as the output meta file.  This may need to be generalized.
+        std::string enriched_elements_rel_stem = 
+            (curr_time_step_dir_.filename() / "enriched_elements").generic_string();
+        fea_io::MeshObect enriched_elements_mesh_object;
+        enriched_elements_mesh_object.type = fea_io::MeshObjectType::Volume;
+        enriched_elements_mesh_object.mesh_path = enriched_elements_rel_stem;
+        //enriched_elements_mesh_object.data_paths.push_back(enriched_elements_rel_stem);
+
+        // Update the time step info
+        time_step_info.levels_of_detail.push_back({
+            1, // level
+            fea_io::LODParentRelation::ConformingOverlapping, // relationship_with_parent
+            { enriched_elements_mesh_object } }); // mesh_objects
+
+        {
+            // Create a mesh for the enriched elements which is only topological
+            auto enriched_elements_mesh = extract_enriched_elements(*mesh_);
+            // DEBUG TODO delete
+            flex_mesh::write_vtk(enriched_elements_mesh,
+                enriched_elements_path_stem.string() + ".vtk", false, false);
+            // Write the mesh file that the updated meta info refers to
+            flex_mesh::FEAIOInterface<flex_mesh::MeshPartition<Node, flex_mesh::Element<Node>>>::write(
+                enriched_elements_mesh, enriched_elements_path_stem.string(), {});
+
+            {
+                // Create a writer for this time step
+                fea_io::DataWriter<flex_mesh::GlobalIndex, flex_mesh::LocalIndex, flex_mesh::FloatType> writer;
+
+                std::vector<output::OutputFlag*> flags_to_be_output;
+                for (auto& flag : output_flags_)
+                {
+                    if (flag->should_be_output())
+                    {
+                        flags_to_be_output.push_back(flag.get());
+                    }
+                }
+
+                // TODO only update this if the mesh has changed in subsequent writes
+                flex_mesh::SubcomponentMaps enriched_elements_subcomponent_maps;
+                enriched_elements_subcomponent_maps.update_maps(enriched_elements_mesh);
+
+                std::ofstream ascii_writer((enriched_elements_path_stem / ".txt").string());
+
+                // Create an output algorithm for each output flag involved in this write
+                auto output_algorithms = output::get_output_algorithms(ascii_writer, writer,
+                    enriched_elements_mesh.get_partition_id(), flags_to_be_output,
+                    static_cast<flex_mesh::LocalIndex>(enriched_elements_mesh.nodes().size()),
+                    subcomponent_maps_);
+
+                std::vector<fea_io::ArrayInfo> array_infos;
+                for (auto& output_algorithm : output_algorithms)
+                {
+                    array_infos.push_back(output_algorithm->get_fea_io_array_info());
+                }
+
+                // Create MeshInfo from the mesh
+                auto mesh_info = enriched_elements_mesh.get_fea_io_mesh_info();
+                auto partition_info = enriched_elements_mesh.get_fea_io_partition_info();
+
+                // Find number of quadrature points
+                flex_mesh::GlobalIndex n_quad_points = 0;
+                for (auto& e_ptr : mesh_->elements())
+                {
+                    if (e_ptr->has_formulation_type<finite_element::XFEMFormulation>())
+                    {
+                        n_quad_points += e_ptr->get_n_quad_points();
+                    }
+                }
+
+                // Initialize the data writer for this output step
+                writer.initialize(enriched_elements_path_stem.string(),
+                    mesh_info, partition_info, n_quad_points, array_infos);
+
+                auto multi_field_calc = output::get_element_multi_field_calc(output_algorithms);
+
+                for (auto& output_algorithm : output_algorithms)
+                {
+                    output_algorithm->pre_loop_step(multi_field_calc);
+                }
+
+                // TODO move this to assembler?
+                std::unique_ptr<finite_element::ElementWorkspace> element_workspace_ptr
+                    = std::make_unique<finite_element::ElementWorkspace>();
+                simple_math::GeneralVector elem_solution_vector;
+                auto curr_enriched_element_local_index = 0;
+                for (auto& e_ptr : mesh_->elements())
+                {
+                    if (e_ptr->has_formulation_type<finite_element::XFEMFormulation>())
+                    {
+                        // Provide the current solution in case the element requries it.
+                        elem_solution_vector = gl_displacement_->get_element_part(e_ptr->get_local_number());
+
+                        // This should be separated out in the future, but for now provide the workspace
+                        e_ptr->set_workspace(element_workspace_ptr.get());
+
+                        // Start calculation block
+                        e_ptr->start_calculations(elem_solution_vector);
+
+                        auto poly_e_ptr = enriched_elements_mesh.elements()[curr_enriched_element_local_index];
+                        auto& xfem_form =
+                            static_cast<finite_element::XFEMFormulation&>(
+                                e_ptr->get_formulation());
+                        for (auto leaf_index : utility::range_from_zero(xfem_form.get_n_leaves()))
+                        {
+                            xfem_form.calculate(multi_field_calc, leaf_index);
+
+                            for (auto& output_algorithm : output_algorithms)
+                            {
+                                // Use the element in the polyhedral mesh for the output algorithm
+                                output_algorithm->add_element_contribution(*poly_e_ptr, multi_field_calc);
+                            }
+                        }
+
+                        // End calculation block
+                        e_ptr->end_calculations();
+
+                    }
+                }
+
+                for (auto& output_algorithm : output_algorithms)
+                {
+                    output_algorithm->post_loop_step();
+                }
+
+                writer.close();
+                ascii_writer.close();
+            }
+        }
+
+        output_meta_.update_meta_file();
     }
 
     void FractureAnalysis::solve_equillibrium_step()

@@ -1,13 +1,23 @@
 {
     "analysis": {
         "attributes": [],
-        "name": "BarWithHole",
-        "timesteps": [
-            {
-                "mesh_path": "bar_with_hole",
-                "time": 0.0,
-                "time_step_id": 0
-            }
-        ]
+        "name": "bar_with_hole",
+        "levels_of_detail_names": [
+            "original"
+        ],
+        "input_info": {
+            "input_script_path": "../input_script.inx",
+            "levels_of_detail": [
+                {
+                    "level": 0,
+                    "mesh_objects": [
+                        {
+                            "type": "Volume",
+                            "mesh_path": "bar_with_hole"
+                        }
+                    ]
+                }
+            ]
+        }
     }
 }

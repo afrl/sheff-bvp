@@ -21,10 +21,39 @@ namespace fea_analysis
         FeaAnalysis() {}
         virtual ~FeaAnalysis() {}
 
-        /// Read an input meta file (will set the mesh)
-        void set_input_meta(const std::string relative_path_to_meta);
-        /// Sets the mesh for the analysis
-        void set_mesh(std::unique_ptr<Mesh> mesh);
+        /// @name Pre-Solve Methods
+        /// Methods that should be called before solve_time_steps() is called.
+        ///@{
+
+        /// Sets the input for the analysis, reads the input mesh (and any groups or data
+        /// assocciated with it), and sets up the writer for the output meta file.
+        /// \param input_script_path - the path to input script is used for information
+        ///        in the output meta file.  The file is not accessed by this method.
+        /// \param input_meta_file_path - the path to the input meta file that contains the
+        ///        the mesh, groups, and input data.  For an analysis from the start, this
+        ///        should be the path to the file created by the preprocessor, but for a
+        ///        restart, it should be the output meta file that is being restarted.
+        ///        Note: the mesh, groups, and input data will be copied to the output
+        ///        directory.  This ensures that the output directory is self-contained, but
+        ///        does come at a cost of hard disk space.
+        /// \param output_dir_path - the path to the output directory.  This can be a relative
+        ///        path but should be relative to the current working directory.  If the
+        ///        directory does not exist yet, it will be created.
+        void set_input(
+            const std::string input_script_path,
+            const std::string input_meta_file_path,
+            const std::string output_dir_path);
+        /// Sets input for the analysis, similar to the other set_input() method, but
+        /// this method sets the mesh object directory and is intended for unit tests
+        /// or scripts that create the mesh on the fly.
+        /// \param mesh - the input mesh to use for the analysis
+        /// \param output_dir_path - the path to the output directory.  This can be a relative
+        ///        path but should be relative to the current working directory.  If the
+        ///        directory does not exist yet, it will be created.
+        void set_input(
+            std::unique_ptr<Mesh> mesh,
+            const std::string analysis_name,
+            const std::string output_dir_path);
         /// Add a constitutive relation to the analysis
         void add_constitutive_relation(const std::string constitutive_relation_name,
             std::unique_ptr<constitutive::BaseConstitutiveRelation>);
@@ -35,8 +64,14 @@ namespace fea_analysis
         /// on the Node selection given to it when constructed.
         void add_boundary_condition(std::unique_ptr<BoundaryCondition> boundary_condition);
 
-        /// Creates all of the objects needed before solve_time_steps can be called
+        /// Creates all of the objects needed before solve_time_steps() can be called.
+        /// This should be called after all other pre-solve methods have been called, but
+        /// before pre-cracks are inserted (if applicable).
         virtual void setup_analysis();
+
+        ///@}
+        // End Pre-Solve Methods
+
         /// Loops over the time steps, does iteration, writes output, etc.
         /// It is the primary analysis method.
         void solve_time_steps();
@@ -61,8 +96,9 @@ namespace fea_analysis
         output::OutputFlagCache output_flag_cache_;
         std::vector<std::unique_ptr<output::OutputFlag>> output_flags_;
         fea_io::MetaWriter output_meta_;
+        fs::path output_dir_;
+        fs::path curr_time_step_dir_;
 
-        /// Initialize the global matrices and vectors for the analysis
 		virtual void set_element_formulations() = 0;
         virtual void initialize_linear_algebra() = 0;
         virtual void apply_boundary_conditions();
