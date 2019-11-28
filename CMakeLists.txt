@@ -4,12 +4,11 @@ cmake_policy(SET CMP0048 NEW)
 project(FEAANALYSIS VERSION 1.0.0 LANGUAGES CXX)
 
 # Options
-option(FEAANALYSIS_BuildDev "Build the project in the dev folder. (intended for debugging this project by devs)" OFF)
 option(FEAANALYSIS_BuildTests "Build the unit tests." OFF)
 
 # For debugging, print generator, compiler, and options
 message(STATUS "Gen: ${CMAKE_GENERATOR}, CXX: ${CMAKE_CXX_COMPILER_ID}, Mode: ${CMAKE_BUILD_TYPE}")
-message(STATUS "Dev: ${FEAANALYSIS_BuildDev}, Tests: ${FEAANALYSIS_BuildTests}")
+message(STATUS "Tests: ${FEAANALYSIS_BuildTests}")
 
 ##################
 # Checking input #
@@ -96,11 +95,6 @@ assign_source_group_FeaCrack()
 # Add dev and unit test targets #
 #################################
 
-# Build dev
-if(FEAANALYSIS_BuildDev)
-    add_subdirectory(dev)
-endif()
-    
 # Build tests
 if(FEAANALYSIS_BuildTests)
     include(CTest)
