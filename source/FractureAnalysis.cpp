@@ -116,8 +116,14 @@ namespace fea_analysis
             crack.write_vtk("./", 0, 0);
         }
 
+		std::cout << "Before renumber:" << std::endl;
+		std::cout << dof_map_->str() << std::endl;
+
         // Change phase to static phase
         dof_map_->start_renumber_phase();
+
+		std::cout << "After renumber:" << std::endl;
+		std::cout << dof_map_->str() << std::endl;
 
         auto& renumbering_new_rank_to_old_rank_map =
             dof_map_->get_renumbering_new_rank_to_old_rank_map();
@@ -173,12 +179,15 @@ namespace fea_analysis
         */
     }
 
-    static flex_mesh::MeshPartition<Node, flex_mesh::Element<Node>>
-        extract_enriched_elements(Mesh& original_mesh)
+    static void extract_enriched_elements(
+        const Mesh& original_mesh,
+        flex_mesh::MeshPartition<Node, flex_mesh::Element<Node>>& enriched_elements_mesh,
+        flex_mesh::MeshPartition<Node, flex_mesh::Element<Node>>& enrichment_surfaces_mesh)
     {
-        flex_mesh::MeshPartition<Node, flex_mesh::Element<Node>> enriched_elements_mesh;
         flex_mesh::LocalIndex curr_local_node_i = 0;
         flex_mesh::LocalIndex curr_local_element_i = 0;
+        flex_mesh::LocalIndex curr_surf_local_node_i = 0;
+        flex_mesh::LocalIndex curr_surf_local_element_i = 0;
         for (auto& e_ptr : original_mesh.elements())
         {
             if (e_ptr->has_formulation_type<finite_element::XFEMFormulation>())
@@ -193,6 +202,8 @@ namespace fea_analysis
                 flex_mesh::NodeX3Matrix node_coords;
                 e_ptr->get_node_coordinates(node_coords);
 
+                // Add nodes and elements for the integration domain of each field
+                // Fills enriched_elements_mesh
                 for (auto leaf_index : utility::range_from_zero(xfem_form.get_n_leaves()))
                 {
                     auto leaf_info = tree_traverser.get_leaf(leaf_index);
@@ -244,10 +255,50 @@ namespace fea_analysis
                     poly_element->set_component_id(e_ptr->get_component_id());
 ;                   enriched_elements_mesh.elements().add(std::move(poly_element));
                 }
+
+                // Add nodes and elements for each enrichment
+                // Fills enrichment_surfaces_mesh
+                auto& enrichment_facets = integration_domains.get_enrichment_facets();
+                for (auto enrichment_index : utility::range_from_zero(xfem_form.get_n_enrichments()))
+                {
+                    auto& facet_point_indices = enrichment_facets[enrichment_index];
+                    
+                    std::vector<Node*> connectivity;
+                    for (auto i : facet_point_indices)
+                    {
+                        // The points of the integration domain is in the parametric coordinate
+                        // system, so they need to be transformed to the global for plotting.
+                        auto p = integration_domains.get_points()[i];
+                        auto shape_function_values =
+                            e_ptr->get_shape_function_values(p);
+
+                        simple_math::Point global_p;
+                        for (auto i = 0; i < 3; i++)
+                        {
+                            global_p[i] = shape_function_values.dot(node_coords.col(i));
+                        }
+
+                        connectivity.push_back(
+                            enrichment_surfaces_mesh.add_node_by_coord(global_p));
+                        connectivity.back()->set_local_number(curr_surf_local_node_i++);
+                    }
+
+                    auto polygon_element = std::make_unique<flex_mesh::Element<Node>>();
+                    polygon_element->initialize(
+                        flex_mesh::ElementType::POLYGON,
+                        connectivity,
+                        flex_mesh::LCSAssignment::None);
+
+                    polygon_element->set_local_number(curr_surf_local_element_i++);
+                    polygon_element->set_global_number(e_ptr->get_global_number());
+                    polygon_element->set_component_id(e_ptr->get_component_id());
+                    // Right now, this throws off the reader since the component selection
+                    // does not apply to enrichment surfaces.  How do we want to indicate surface?
+                        //tree_traverser.get_enrichment(enrichment_index).enrichment_surface_id);
+                    enrichment_surfaces_mesh.elements().add(std::move(polygon_element));
+                }
             }
         }
-
-        return enriched_elements_mesh;
     }
 
     void FractureAnalysis::write_output()
@@ -266,31 +317,53 @@ namespace fea_analysis
 
         // Update the output meta info with the mesh object for the enriched elements
         fs::path enriched_elements_path_stem = curr_time_step_dir_ / "enriched_elements";
+        fs::path enrichment_surfaces_path_stem = curr_time_step_dir_ / "enrichment_surfaces";
+
         // Note: there is an assumption here that the time step directory is the same folder
         // as the output meta file.  This may need to be generalized.
         std::string enriched_elements_rel_stem = 
             (curr_time_step_dir_.filename() / "enriched_elements").generic_string();
-        fea_io::MeshObect enriched_elements_mesh_object;
+        std::string enrichment_surfaces_rel_stem =
+            (curr_time_step_dir_.filename() / "enrichment_surfaces").generic_string();
+
+        fea_io::MeshObject enriched_elements_mesh_object;
         enriched_elements_mesh_object.type = fea_io::MeshObjectType::Volume;
         enriched_elements_mesh_object.mesh_path = enriched_elements_rel_stem;
-        //enriched_elements_mesh_object.data_paths.push_back(enriched_elements_rel_stem);
+		enriched_elements_mesh_object.data_paths.push_back(enriched_elements_rel_stem);
+
+        fea_io::MeshObject enrichment_surfaces_mesh_object;
+        enrichment_surfaces_mesh_object.type = fea_io::MeshObjectType::Surface;
+        enrichment_surfaces_mesh_object.mesh_path = enrichment_surfaces_rel_stem;
 
         // Update the time step info
         time_step_info.levels_of_detail.push_back({
             1, // level
             fea_io::LODParentRelation::ConformingOverlapping, // relationship_with_parent
-            { enriched_elements_mesh_object } }); // mesh_objects
+            { enriched_elements_mesh_object,
+              enrichment_surfaces_mesh_object } }); // mesh_objects
 
         {
-            // Create a mesh for the enriched elements which is only topological
-            auto enriched_elements_mesh = extract_enriched_elements(*mesh_);
+            // Create a mesh for the enriched elements and enrichment surfaces which is only topological
+            flex_mesh::MeshPartition<Node, flex_mesh::Element<Node>> enriched_elements_mesh;
+            flex_mesh::MeshPartition<Node, flex_mesh::Element<Node>> enrichment_surfaces_mesh;
+            extract_enriched_elements(*mesh_,
+                enriched_elements_mesh,
+                enrichment_surfaces_mesh);
+
             // DEBUG TODO delete
             flex_mesh::write_vtk(enriched_elements_mesh,
                 enriched_elements_path_stem.string() + ".vtk", false, false);
+            flex_mesh::write_vtk(enrichment_surfaces_mesh,
+                enrichment_surfaces_path_stem.string() + ".vtk", false, false);
+
             // Write the mesh file that the updated meta info refers to
             flex_mesh::FEAIOInterface<flex_mesh::MeshPartition<Node, flex_mesh::Element<Node>>>::write(
                 enriched_elements_mesh, enriched_elements_path_stem.string(), {});
+            flex_mesh::FEAIOInterface<flex_mesh::MeshPartition<Node, flex_mesh::Element<Node>>>::write(
+                enrichment_surfaces_mesh, enrichment_surfaces_path_stem.string(), {});
 
+            // Write data for enriched elements
+            // TODO: write data for enrichment surfaces
             {
                 // Create a writer for this time step
                 fea_io::DataWriter<flex_mesh::GlobalIndex, flex_mesh::LocalIndex, flex_mesh::FloatType> writer;
@@ -365,7 +438,6 @@ namespace fea_analysis
                         // Start calculation block
                         e_ptr->start_calculations(elem_solution_vector);
 
-                        auto poly_e_ptr = enriched_elements_mesh.elements()[curr_enriched_element_local_index];
                         auto& xfem_form =
                             static_cast<finite_element::XFEMFormulation&>(
                                 e_ptr->get_formulation());
@@ -373,11 +445,15 @@ namespace fea_analysis
                         {
                             xfem_form.calculate(multi_field_calc, leaf_index);
 
+							auto poly_e_ptr = enriched_elements_mesh.elements()[curr_enriched_element_local_index];
+
                             for (auto& output_algorithm : output_algorithms)
                             {
                                 // Use the element in the polyhedral mesh for the output algorithm
                                 output_algorithm->add_element_contribution(*poly_e_ptr, multi_field_calc);
                             }
+
+							curr_enriched_element_local_index++;
                         }
 
                         // End calculation block
@@ -448,11 +524,16 @@ namespace fea_analysis
         // Solve //
         ///////////
 
+		std::cout << dof_map_->str() << std::endl;
+
         // TODO make the solver automatically update the ghost values of the solution
         sparse_solver_->solve(
             gl_stiffness_,
             gl_rhs_,
             gl_displacement_);
+
+        auto eigen_vec = gl_displacement_->get_as_eigen_vector();
+        std::cout << "Solution:\n" << eigen_vec << std::endl;
 
         // Debug
         //auto solution = gl_displacement_->get_as_eigen_vector();

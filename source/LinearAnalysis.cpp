@@ -113,7 +113,7 @@ namespace fea_analysis
             time_step_manager_->get_current_time());
 
         {
-            fea_io::MeshObect mesh_object;
+            fea_io::MeshObject mesh_object;
             mesh_object.type = fea_io::MeshObjectType::Volume;
             // Note: we can assign the same paths from the input info because
             // FeaAnalysis::set_input() copies all of the files over to the output directory.

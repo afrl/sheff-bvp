@@ -1,4 +1,4 @@
-#include "UnitTestHelpers.h"
+#include "../UnitTestHelpers.h"
 
 #include "fea_analysis/FractureAnalysis.h"
 #include "flex_mesh/algorithms/Creation.h"
@@ -68,7 +68,7 @@ int main(int argc, char ** argv)
 
     analysis.setup_analysis();
     simple_math::Point initial_coord = { 0.525, 0.2, 0.2 };
-    analysis.insert_precracks({ initial_coord });
+    //analysis.insert_precracks({ initial_coord });
     analysis.solve_time_steps();
 
 	return 0;

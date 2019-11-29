@@ -1,4 +1,4 @@
-#include "UnitTestHelpers.h"
+#include "../UnitTestHelpers.h"
 
 #include "fea_analysis/LinearAnalysis.h"
 #include "flex_mesh/algorithms/UnitElements.h"

@@ -2,6 +2,7 @@
 
 #include "utility/Filesystem.h"
 #include "fea_analysis/BoundaryCondition.h"
+#include "flex_mesh/algorithms/Search.h"
 
 namespace fea_analysis
 {
@@ -60,39 +61,42 @@ namespace fea_analysis
         }
     }
 
-    static std::vector<std::unique_ptr<DirichletBC>> get_unit_tension_x_bcs()
+    static std::vector<std::unique_ptr<DirichletBC>> get_unit_tension_x_bcs(const Mesh& mesh)
     {
         std::vector<std::unique_ptr<DirichletBC>> bcs;
+
+		auto min_coord = flex_mesh::min_coord(mesh.nodes());
+		auto max_coord = flex_mesh::max_coord(mesh.nodes());
 
         // Fix u along the x = -1 side
         NodeSelection x_neg_1_selection;
         x_neg_1_selection.add_criteria(
-            [](const fea_analysis::Node& n) -> bool {
-            return n.x() == -1.0;
+            [val = min_coord[0]](const fea_analysis::Node& n) -> bool {
+            return n.x() == val;
         });
         bcs.push_back(std::unique_ptr<DirichletBC>(
             new DirichletBC(x_neg_1_selection, { 0 , 0 })));
         // Fix v along the y = -1 side
         NodeSelection y_neg_1_selection;
         y_neg_1_selection.add_criteria(
-            [](const fea_analysis::Node& n) -> bool {
-            return n.y() == -1.0;
+            [val = min_coord[1]](const fea_analysis::Node& n) -> bool {
+            return n.y() == val;
         });
         bcs.push_back(std::unique_ptr<DirichletBC>(
             new DirichletBC(y_neg_1_selection, { 1 , 0 })));
         // Fix w along the z = -1 side
         NodeSelection z_neg_1_selection;
         z_neg_1_selection.add_criteria(
-            [](const fea_analysis::Node& n) -> bool {
-            return n.z() == -1.0;
+            [val = min_coord[2]](const fea_analysis::Node& n) -> bool {
+            return n.z() == val;
         });
         bcs.push_back(std::unique_ptr<DirichletBC>(
             new DirichletBC(z_neg_1_selection, { 2 , 0 })));
         // Specify u along the x = 1 side
         NodeSelection x_pos_1_selection;
         x_pos_1_selection.add_criteria(
-            [](const fea_analysis::Node& n) -> bool {
-            return n.x() == 1.0;
+            [val = max_coord[0]](const fea_analysis::Node& n) -> bool {
+            return n.x() == val;
         });
         bcs.push_back(std::unique_ptr<DirichletBC>(
             new DirichletBC(x_pos_1_selection, { 0 , 1 })));

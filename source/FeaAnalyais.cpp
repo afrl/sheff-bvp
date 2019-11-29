@@ -59,7 +59,7 @@ namespace fea_analysis
 
             for (auto& mesh_object : input_lod.mesh_objects)
             {
-                fea_io::MeshObect output_mesh_object;
+                fea_io::MeshObject output_mesh_object;
 
                 fs::path mesh_path = input_meta_dir / mesh_object.mesh_path;
                 _UTIL_ASSERT_C(mesh_path.parent_path() == input_meta_dir,
@@ -139,7 +139,7 @@ namespace fea_analysis
         output_analysis_meta.name = analysis_name;
         output_analysis_meta.levels_of_detail_names.push_back("original");
 
-        fea_io::MeshObect mesh_object;
+        fea_io::MeshObject mesh_object;
         mesh_object.mesh_path = "input_mesh";
         mesh_object.type = fea_io::MeshObjectType::Volume;
 
