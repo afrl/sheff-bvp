@@ -1,3 +1,5 @@
+#pragma once
+
 #include "fea_analysis/FeaAnalysis.h"
 
 #include "sparse_linear_algebra/SparseMatrix.h"

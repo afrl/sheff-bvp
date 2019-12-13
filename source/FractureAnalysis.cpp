@@ -1,3 +1,4 @@
+#include "..\include\fea_analysis\FractureAnalysis.h"
 #include "fea_analysis/FractureAnalysis.h"
 
 #include "flex_mesh/maps/AdjacencyLists.h"
@@ -41,7 +42,6 @@ namespace fea_analysis
         };
 
         enrichment_surfaces_ = std::make_unique<fea_crack::EnrichmentSurfaceManager>(
-            fea_crack::RepresentationType::LevelSet,
             *mesh_,
             adjacency_list_,
             get_element_solution_cb,
@@ -65,10 +65,10 @@ namespace fea_analysis
             }
             auto& direction_criteria = initial_element_ptr->get_direction_criterion();
             simple_math::VoigtVector zero_stress = simple_math::VoigtVector::Zero(6);
-            auto crack_normal = direction_criteria.eval(i, initiation_points[i], zero_stress);
+            auto crack_normal = direction_criteria.eval(new_crack_ptr->get_global_id(), initiation_points[i], zero_stress);
             new_crack_ptr->initiate(*initial_element_ptr, 0, initiation_points[i], crack_normal);
 
-            //cracks.back()->write_vtk("./", 0);
+            new_crack_ptr->write_vtk("./", 0, 0);
         }
 
         // Grow all the cracks one element until they can no longer grow
@@ -82,7 +82,7 @@ namespace fea_analysis
                 std::vector<fea_crack::EnrichmentAtFront*> enrichments_at_front_to_grow;
                 for (auto& enrichment_at_front : enrichments_at_front)
                 {
-                    auto& element = enrichment_at_front->get_enrichment().get_element();
+                    auto& element = enrichment_at_front->get_enrichment_ref().get_element();
                     auto& criterion = element.get_propagation_criterion();
                     if (criterion.eval(crack_state.get_enrichment_surface_id(),
                         element.get_mean_coordinate(), simple_math::Vector3D::Zero()))
@@ -106,7 +106,7 @@ namespace fea_analysis
                         *enrichment_at_front_to_grow,
                         search_result);
                 }
-                //crack->write_vtk("./", growth_step);
+                crack.write_vtk("./", 0, growth_step);
                 growth_step++;
             }
         }
@@ -116,14 +116,204 @@ namespace fea_analysis
             crack.write_vtk("./", 0, 0);
         }
 
-		std::cout << "Before renumber:" << std::endl;
-		std::cout << dof_map_->str() << std::endl;
+        // Change phase to static phase
+        dof_map_->start_renumber_phase();
+
+        auto& renumbering_new_rank_to_old_rank_map =
+            dof_map_->get_renumbering_new_rank_to_old_rank_map();
+        auto& renumbering_old_rank_to_global_map =
+            dof_map_->get_renumbering_old_rank_to_global_map();
+
+        gl_stiffness_->renumber_dofs(0,
+            renumbering_old_rank_to_global_map,
+            renumbering_new_rank_to_old_rank_map);
+        gl_displacement_->renumber_dofs(0,
+            renumbering_old_rank_to_global_map,
+            renumbering_new_rank_to_old_rank_map);
+        gl_rhs_->renumber_dofs(0,
+            renumbering_old_rank_to_global_map,
+            renumbering_new_rank_to_old_rank_map);
+        gl_eigenstrain_force_->renumber_dofs(0,
+            renumbering_old_rank_to_global_map,
+            renumbering_new_rank_to_old_rank_map);
+
+        dof_map_->end_renumber_phase();
+    }
+
+    void FractureAnalysis::insert_precracks_by_function(
+        const std::vector<LevelSetFunction>& level_set_functions)
+    {
+        dof_map_->start_enrichment_phase();
+
+        for (auto& level_set_function : level_set_functions)
+        {
+            auto new_surface_ptr = enrichment_surfaces_->add_enrichment_surface();
+            new_surface_ptr->insert_based_on_level_set(
+                level_set_function,
+                [](const simple_math::Point&) { return true; });
+        }
+
+        for (auto& crack : *enrichment_surfaces_)
+        {
+            crack.write_vtk("./", 0, 0);
+        }
 
         // Change phase to static phase
         dof_map_->start_renumber_phase();
 
-		std::cout << "After renumber:" << std::endl;
-		std::cout << dof_map_->str() << std::endl;
+        auto& renumbering_new_rank_to_old_rank_map =
+            dof_map_->get_renumbering_new_rank_to_old_rank_map();
+        auto& renumbering_old_rank_to_global_map =
+            dof_map_->get_renumbering_old_rank_to_global_map();
+
+        gl_stiffness_->renumber_dofs(0,
+            renumbering_old_rank_to_global_map,
+            renumbering_new_rank_to_old_rank_map);
+        gl_displacement_->renumber_dofs(0,
+            renumbering_old_rank_to_global_map,
+            renumbering_new_rank_to_old_rank_map);
+        gl_rhs_->renumber_dofs(0,
+            renumbering_old_rank_to_global_map,
+            renumbering_new_rank_to_old_rank_map);
+        gl_eigenstrain_force_->renumber_dofs(0,
+            renumbering_old_rank_to_global_map,
+            renumbering_new_rank_to_old_rank_map);
+
+        dof_map_->end_renumber_phase();
+    }
+
+    void FractureAnalysis::insert_precracks_by_function_outside_previous(
+        const std::vector<LevelSetFunction>& level_set_functions)
+    {
+        dof_map_->start_enrichment_phase();
+
+        for (auto i : utility::indices(level_set_functions))
+        {
+            auto new_surface_ptr = enrichment_surfaces_->add_enrichment_surface();
+            new_surface_ptr->insert_based_on_level_set(
+                level_set_functions[i],
+                [&level_set_functions, &i](const simple_math::Point& p)
+                {
+                    for (auto j : utility::range_from_zero(i))
+                    {
+                        if (level_set_functions[j](p) <= 0.0)
+                        {
+                            return false;
+                        }
+                    }
+                    return true;
+                },
+                false);
+        }
+
+        for (auto& crack : *enrichment_surfaces_)
+        {
+            crack.write_vtk("./", 0, 0);
+        }
+
+        // Change phase to static phase
+        dof_map_->start_renumber_phase();
+
+        auto& renumbering_new_rank_to_old_rank_map =
+            dof_map_->get_renumbering_new_rank_to_old_rank_map();
+        auto& renumbering_old_rank_to_global_map =
+            dof_map_->get_renumbering_old_rank_to_global_map();
+
+        gl_stiffness_->renumber_dofs(0,
+            renumbering_old_rank_to_global_map,
+            renumbering_new_rank_to_old_rank_map);
+        gl_displacement_->renumber_dofs(0,
+            renumbering_old_rank_to_global_map,
+            renumbering_new_rank_to_old_rank_map);
+        gl_rhs_->renumber_dofs(0,
+            renumbering_old_rank_to_global_map,
+            renumbering_new_rank_to_old_rank_map);
+        gl_eigenstrain_force_->renumber_dofs(0,
+            renumbering_old_rank_to_global_map,
+            renumbering_new_rank_to_old_rank_map);
+
+        dof_map_->end_renumber_phase();
+    }
+
+    void FractureAnalysis::insert_precracks_by_function_with_boolean(
+        const std::vector<LevelSetFunction>& level_set_functions)
+    {
+        // TODO relax this with further development.
+        if (level_set_functions.size() != 2)
+        {
+            // Throw error
+        }
+
+        // TODO
+        auto& f1 = level_set_functions[0];
+        auto& f2 = level_set_functions[1];
+        LevelSetFunction f1_wrapped =
+            [&f1, &f2](const simple_math::Point& p) -> const double
+            {
+                const double f2_val = f2(p);
+                if (f2_val > 0)
+                {
+                    return f1(p);
+                }
+                else
+                {
+                    return (f1(p) - f2_val);
+                }
+            };
+
+        dof_map_->start_enrichment_phase();
+
+        // Insert surface for f1 (including boolean)
+        {
+            auto new_surface_ptr = enrichment_surfaces_->add_enrichment_surface();
+            new_surface_ptr->insert_based_on_level_set(
+                f1_wrapped,
+                [](const simple_math::Point& p) { return true; });
+        }
+
+        // Insert surface for f2
+        {
+            // Why do I have to flipped the second condition?  Get to the bottom of this.
+            LevelSetFunction f1_wrapped2 =
+                [&f1, &f2](const simple_math::Point& p) -> const double
+            {
+                const double f2_val = f2(p);
+                if (f2_val > 0)
+                {
+                    return f1(p);
+                }
+                else
+                {
+                    return (f2_val - f1(p));
+                }
+            };
+
+            auto new_surface_ptr = enrichment_surfaces_->add_enrichment_surface();
+            new_surface_ptr->insert_based_on_level_set(
+                f2,
+                [f1, f1_wrapped](const simple_math::Point& p) -> const bool {
+                    const double f1_val = f1(p);
+                    const double f1_wrapped_val = f1_wrapped(p);
+                    if (f1_val > 0)
+                    {
+                        return true;
+                    }
+                    else if (f1_wrapped_val > 0)
+                    {
+                        return true;
+                    }
+                    return false;
+                },
+                false);
+        }
+
+        for (auto& crack : *enrichment_surfaces_)
+        {
+            crack.write_vtk("./", 0, 0);
+        }
+
+        // Change phase to static phase
+        dof_map_->start_renumber_phase();
 
         auto& renumbering_new_rank_to_old_rank_map =
             dof_map_->get_renumbering_new_rank_to_old_rank_map();
@@ -532,8 +722,8 @@ namespace fea_analysis
             gl_rhs_,
             gl_displacement_);
 
-        auto eigen_vec = gl_displacement_->get_as_eigen_vector();
-        std::cout << "Solution:\n" << eigen_vec << std::endl;
+        //auto eigen_vec = gl_displacement_->get_as_eigen_vector();
+        //std::cout << "Solution:\n" << eigen_vec << std::endl;
 
         // Debug
         //auto solution = gl_displacement_->get_as_eigen_vector();

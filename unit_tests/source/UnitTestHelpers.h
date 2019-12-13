@@ -103,4 +103,47 @@ namespace fea_analysis
 
         return bcs;
     }
+
+    static std::vector<std::unique_ptr<DirichletBC>> get_unit_tension_z_bcs(const Mesh& mesh)
+    {
+        std::vector<std::unique_ptr<DirichletBC>> bcs;
+
+        auto min_coord = flex_mesh::min_coord(mesh.nodes());
+        auto max_coord = flex_mesh::max_coord(mesh.nodes());
+
+        // Fix u along the x = -1 side
+        NodeSelection x_neg_1_selection;
+        x_neg_1_selection.add_criteria(
+            [val = min_coord[0]](const fea_analysis::Node& n) -> bool {
+            return n.x() == val;
+        });
+        bcs.push_back(std::unique_ptr<DirichletBC>(
+            new DirichletBC(x_neg_1_selection, { 0 , 0 })));
+        // Fix v along the y = -1 side
+        NodeSelection y_neg_1_selection;
+        y_neg_1_selection.add_criteria(
+            [val = min_coord[1]](const fea_analysis::Node& n) -> bool {
+            return n.y() == val;
+        });
+        bcs.push_back(std::unique_ptr<DirichletBC>(
+            new DirichletBC(y_neg_1_selection, { 1 , 0 })));
+        // Fix w along the z = -1 side
+        NodeSelection z_neg_1_selection;
+        z_neg_1_selection.add_criteria(
+            [val = min_coord[2]](const fea_analysis::Node& n) -> bool {
+            return n.z() == val;
+        });
+        bcs.push_back(std::unique_ptr<DirichletBC>(
+            new DirichletBC(z_neg_1_selection, { 2 , 0 })));
+        // Specify u along the z = 1 side
+        NodeSelection z_pos_1_selection;
+        z_pos_1_selection.add_criteria(
+            [val = max_coord[2]](const fea_analysis::Node& n) -> bool {
+            return n.z() == val;
+        });
+        bcs.push_back(std::unique_ptr<DirichletBC>(
+            new DirichletBC(z_pos_1_selection, { 2 , 1 })));
+
+        return bcs;
+    }
 }
