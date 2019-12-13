@@ -51,7 +51,7 @@ int main(int argc, char ** argv)
     analysis.set_elements_constitutive_relation(
         fea_analysis::ElementSelection(),
         "IsotropicMaterial");
-    for (auto& bc : get_unit_tension_x_bcs())
+    for (auto& bc : get_unit_tension_x_bcs(*weak_mesh_ptr))
     {
         analysis.add_boundary_condition(std::move(bc));
     }

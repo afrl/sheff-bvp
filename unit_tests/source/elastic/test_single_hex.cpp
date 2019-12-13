@@ -17,6 +17,7 @@ int main(int argc, char ** argv)
 
     // Use a single linear hex
     auto mesh_ptr = flex_mesh::get_unit_linear_hex_ptr<fea_analysis::Mesh>();
+	auto weak_mesh_ptr = mesh_ptr.get();
 
     // Create a constitutive relation
     const double E = 1e9;
@@ -38,7 +39,7 @@ int main(int argc, char ** argv)
     analysis.set_elements_constitutive_relation(
         fea_analysis::ElementSelection(),
         "IsotropicMaterial");
-    for (auto& bc : get_unit_tension_x_bcs())
+    for (auto& bc : get_unit_tension_x_bcs(*weak_mesh_ptr))
     {
         analysis.add_boundary_condition(std::move(bc));
     }
