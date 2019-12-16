@@ -69,6 +69,11 @@ namespace fea_analysis
         void insert_precracks_by_function_with_boolean(
             const std::vector<SurfaceInsertionByLevelSet>& insertions);
 
+		/// Loops over all enrichment surfaces and tries to grow them again.  Presumably, the propagation
+		/// criteria for the surface could have changed after the insert function was called, and this
+		/// method will try to grow them again.
+		void try_to_grow_precracks();
+
     protected:
         fea_crack::ElementAdjacencyList adjacency_list_;
         std::unique_ptr<fea_crack::EnrichmentSurfaceManager> enrichment_surfaces_;
