@@ -11,7 +11,8 @@ namespace fea_analysis
         const std::string& data_filename)
     {
         // Assumes test data is one directory up in another directory called "data"
-        auto data_path = fs::path(__FILE__).parent_path().parent_path().append("data").append(data_filename);
+		auto this_file_path = fs::canonical(fs::path(__FILE__));
+        auto data_path = this_file_path.parent_path().parent_path().append("data").append(data_filename);
         return data_path.string();
     }
 
