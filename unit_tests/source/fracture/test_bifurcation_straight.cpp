@@ -20,13 +20,10 @@ int main(int argc, char ** argv)
 	// A vector of { 0, 1, ..., 10 }
 	std::vector<double> p(11);
 	std::iota(p.begin(), p.end(), 0);
-	// A vector of { 0, 1, ..., 11 }
-	std::vector<double> z(12);
-	std::iota(z.begin(), z.end(), 0);
 
     // Creates a NxNxN grid from 0 to 10
     auto mesh_ptr = std::make_unique<Mesh>();
-	*mesh_ptr = flex_mesh::make_grid<Mesh>(z, p, z, false);
+	*mesh_ptr = flex_mesh::make_grid<Mesh>(p, p, p, false);
     flex_mesh::write_vtk(*mesh_ptr, (get_output_directory(__FILE__) / "mesh.vtk").string());
 
 	// Create a constitutive relation
@@ -50,7 +47,7 @@ int main(int argc, char ** argv)
     analysis.set_elements_constitutive_relation(
         fea_analysis::ElementSelection(),
         "IsotropicMaterial");
-    for (auto& bc : get_unit_tension_z_bcs(*weak_mesh_ptr))
+    for (auto& bc : get_unit_tension_x_z_bcs(*weak_mesh_ptr))
     {
         analysis.add_boundary_condition(std::move(bc));
     }
@@ -58,42 +55,20 @@ int main(int argc, char ** argv)
     constitutive::PositionFunctionDirectionCriterion direction_criterion(
         [](const int& crack_index, const simple_math::Point& p) -> simple_math::Vector3D
     {
-		if (crack_index == 0)
-		{
-			if (p[1] <= 5)
-			{
-				return simple_math::Vector3D(0, 0, 1);
-			}
-			else if (p[0] > 5)
-			{
-				return simple_math::Vector3D(0, 1, 1);
-			}
-			else
-			{
-				return simple_math::Vector3D(0, -1, 1);
-			}
-		}
-		else
-		{
-			if (p[1] >= 5)
-			{
-				return simple_math::Vector3D(1, 0, 0);
-			}
-			else if (p[2] < 5)
-			{
-				return simple_math::Vector3D(1, 1, 0);
-			}
-			else
-			{
-				return simple_math::Vector3D(1, -1, 0);
-			}
-		}
+        if (crack_index == 0)
+        {
+            return simple_math::Vector3D(0, 0, 1);
+        }
+        else
+        {
+            return simple_math::Vector3D(1, 0, 0);
+        }
     });
 	constitutive::PositionFunctionPropagationCriterion propagation_criterion(
 		[](const int& crack_index, const simple_math::Point& p) -> bool
 	{
-		return (p[1] < 5 && crack_index == 0)
-			|| (p[1] > 5 && crack_index == 1);
+		return (p[1] < 4 && crack_index == 0)
+			|| (p[1] > 6 && crack_index == 1);
 	});
 
     for (auto& e_ptr : weak_mesh_ptr->elements())
@@ -104,9 +79,32 @@ int main(int argc, char ** argv)
 
     analysis.setup_analysis();
     analysis.insert_precracks({ 
-		{ 5.0, 0.2, 5.0 },
-		{ 5.0, 9.8, 5.0 }
+		{ 4.5, 0.2, 4.5 },
+		{ 4.5, 9.8, 4.5 }
 	});
+
+    // Let the cracks grow past each other
+    constitutive::PositionFunctionPropagationCriterion propagation_criterion2(
+        [](const int& crack_index, const simple_math::Point& p) -> bool
+    {
+        return crack_index == 0;
+    });
+    for (auto& e_ptr : weak_mesh_ptr->elements())
+    {
+        e_ptr->set_propagation_criterion(propagation_criterion2);
+    }
+    analysis.try_to_grow_precracks();
+    constitutive::PositionFunctionPropagationCriterion propagation_criterion3(
+        [](const int& crack_index, const simple_math::Point& p) -> bool
+    {
+        return crack_index == 1;
+    });
+    for (auto& e_ptr : weak_mesh_ptr->elements())
+    {
+        e_ptr->set_propagation_criterion(propagation_criterion3);
+    }
+    analysis.try_to_grow_precracks();
+
     analysis.solve_time_steps();
 
 	return 0;

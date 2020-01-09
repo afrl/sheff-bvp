@@ -21,6 +21,7 @@
 #include "constitutive/enrichment/direction_criteria/MaxPrincipalStressDirectionCriterion.h"
 
 #include "fea_crack/dof_algorithm/CGXFEMDofAlgorithm.h"
+#include "fea_crack/misc/JsonConversion.h"
 
 #include <memory>
 
@@ -409,6 +410,11 @@ namespace fea_analysis
 			renumbering_new_rank_to_old_rank_map);
 
 		dof_map_->end_renumber_phase();
+
+        fea_crack::write_json_enrichment_info(
+            "./enrichments.json",
+            mesh_->elements(),
+            *dof_map_);
 	}
 
     void FractureAnalysis::solve_time_step()
