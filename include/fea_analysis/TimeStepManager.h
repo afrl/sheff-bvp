@@ -58,22 +58,22 @@ namespace fea_analysis
         ///////////////
 
         /// Returns a bool indicating if this is the first time step of the loop.
-        virtual const bool is_first_time_step() const { return current_time_step_ == 0; }
-        virtual const bool is_last_time_step() const { return true; }
+        virtual bool is_first_time_step() const { return current_time_step_ == 0; }
+        virtual bool is_last_time_step() const { return true; }
         /// Returns the current time value (or psuedo-time if it is quasi-static)
-        virtual const double get_current_time() const { return current_time_; }
-        virtual const double get_current_time_increment() const { return current_time_increment_; }
+        virtual double get_current_time() const { return current_time_; }
+        virtual double get_current_time_increment() const { return current_time_increment_; }
         /// Returns the current time step number
-        virtual const int get_time_step() const { return current_time_step_; }
-        virtual const double get_previous_time() { return previous_time_; }
-        virtual const double get_previous_time_increment() { return previous_time_increment_; }
-        virtual const double get_extrapolation_factor() const { return 1.0; };
+        virtual int get_time_step() const { return current_time_step_; }
+        virtual double get_previous_time() { return previous_time_; }
+        virtual double get_previous_time_increment() { return previous_time_increment_; }
+        virtual double get_extrapolation_factor() const { return 1.0; };
         /// Returns a bool indicating if this is the first time step of the loop.
-        virtual const bool is_first_iteration() const;
+        virtual bool is_first_iteration() const;
         /// Returns the current iteration number of the current iteration loop,
         /// which would be the most nested loop.
-        const int get_iteration_number() const;
-        inline const InitialGuessType get_intial_guess_type() const { return initial_guess_type_; }
+        int get_iteration_number() const;
+        inline InitialGuessType get_intial_guess_type() const { return initial_guess_type_; }
 
     protected:
 

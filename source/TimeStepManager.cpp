@@ -24,12 +24,12 @@ namespace fea_analysis
         return top;
     }
 
-    const bool TimeStepManager::is_first_iteration() const
+    bool TimeStepManager::is_first_iteration() const
     {
         return curr_iterations_.top() == 0;
     }
 
-    const int TimeStepManager::get_iteration_number() const
+    int TimeStepManager::get_iteration_number() const
     {
         if (curr_iterations_.empty())
             return -1;

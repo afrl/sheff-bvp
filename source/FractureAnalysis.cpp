@@ -1,6 +1,4 @@
-#include "..\include\fea_analysis\FractureAnalysis.h"
-#include "fea_analysis/FractureAnalysis.h"
-
+#include "fea_analysis/FractureAnalysis.h" 
 #include "flex_mesh/maps/AdjacencyLists.h"
 #include "flex_mesh/algorithms/Search.h"
 #include "flex_mesh/element/PolyhedronElement.h"

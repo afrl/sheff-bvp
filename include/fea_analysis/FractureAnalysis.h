@@ -18,7 +18,7 @@ namespace fea_analysis
     class FractureAnalysis : public LinearElasticAnalysis
     {
     public:
-        using LevelSetFunction = std::function<const double(const simple_math::Point&)>;
+        using LevelSetFunction = std::function<double(const simple_math::Point&)>;
 
         FractureAnalysis();
         virtual ~FractureAnalysis() {}
