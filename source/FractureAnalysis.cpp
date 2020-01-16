@@ -478,7 +478,8 @@ namespace fea_analysis
                         flex_mesh::LCSAssignment::None);
 
                     polygon_element->set_local_number(curr_surf_local_element_i++);
-                    polygon_element->set_global_number(e_ptr->get_global_number());
+                    polygon_element->set_global_number(
+                        tree_traverser.get_enrichment_ref(enrichment_index).get_data().surface_id);
                     polygon_element->set_component_id(e_ptr->get_component_id());
                     // Right now, this throws off the reader since the component selection
                     // does not apply to enrichment surfaces.  How do we want to indicate surface?
@@ -522,6 +523,7 @@ namespace fea_analysis
         fea_io::MeshObject enrichment_surfaces_mesh_object;
         enrichment_surfaces_mesh_object.type = fea_io::MeshObjectType::Surface;
         enrichment_surfaces_mesh_object.mesh_path = enrichment_surfaces_rel_stem;
+        enriched_elements_mesh_object.data_paths.push_back(enrichment_surfaces_rel_stem);
 
         // Update the time step info
         time_step_info.levels_of_detail.push_back({
@@ -554,58 +556,93 @@ namespace fea_analysis
             // TODO: write data for enrichment surfaces
             {
                 // Create a writer for this time step
-                fea_io::DataWriter<flex_mesh::GlobalIndex, flex_mesh::LocalIndex, flex_mesh::FloatType> writer;
+                fea_io::DataWriter<flex_mesh::GlobalIndex, flex_mesh::LocalIndex, flex_mesh::FloatType> volume_writer;
+                fea_io::DataWriter<flex_mesh::GlobalIndex, flex_mesh::LocalIndex, flex_mesh::FloatType> surface_writer;
 
-                std::vector<output::OutputFlag*> flags_to_be_output;
-                for (auto& flag : output_flags_)
+                std::vector<output::OutputFlag<finite_element::VolumeQuantity>*> volume_flags_to_be_output;
+                for (auto& flag : volume_output_flags_)
                 {
                     if (flag->should_be_output())
                     {
-                        flags_to_be_output.push_back(flag.get());
+                        volume_flags_to_be_output.push_back(flag.get());
+                    }
+                }
+                std::vector<output::OutputFlag<finite_element::SurfaceQuantity>*> surface_flags_to_be_output;
+                for (auto& flag : surface_output_flags_)
+                {
+                    if (flag->should_be_output())
+                    {
+                        surface_flags_to_be_output.push_back(flag.get());
                     }
                 }
 
                 // TODO only update this if the mesh has changed in subsequent writes
                 flex_mesh::SubcomponentMaps enriched_elements_subcomponent_maps;
                 enriched_elements_subcomponent_maps.update_maps(enriched_elements_mesh);
+                flex_mesh::SubcomponentMaps enrichment_surfaces_subcomponent_maps;
+                enrichment_surfaces_subcomponent_maps.update_maps(enrichment_surfaces_mesh);
 
-                std::ofstream ascii_writer((enriched_elements_path_stem / ".txt").string());
+                std::ofstream volume_ascii_writer((enriched_elements_path_stem / ".txt").string());
+                std::ofstream surface_ascii_writer((enriched_elements_path_stem / ".txt").string());
 
                 // Create an output algorithm for each output flag involved in this write
-                auto output_algorithms = output::get_output_algorithms(ascii_writer, writer,
-                    enriched_elements_mesh.get_partition_id(), flags_to_be_output,
+                auto volume_output_algorithms = output::get_output_algorithms_for_volumes(
+                    volume_ascii_writer, volume_writer,
+                    enriched_elements_mesh.get_partition_id(), volume_flags_to_be_output,
                     static_cast<flex_mesh::LocalIndex>(enriched_elements_mesh.nodes().size()),
                     subcomponent_maps_);
+                auto surface_output_algorithms = output::get_output_algorithms_for_surfaces(
+                    surface_ascii_writer, surface_writer,
+                    enrichment_surfaces_mesh.get_partition_id(), surface_flags_to_be_output,
+                    static_cast<flex_mesh::LocalIndex>(enrichment_surfaces_mesh.nodes().size()),
+                    subcomponent_maps_);
 
-                std::vector<fea_io::ArrayInfo> array_infos;
-                for (auto& output_algorithm : output_algorithms)
+                std::vector<fea_io::ArrayInfo> volume_array_infos;
+                for (auto& output_algorithm : volume_output_algorithms)
                 {
-                    array_infos.push_back(output_algorithm->get_fea_io_array_info());
+                    volume_array_infos.push_back(output_algorithm->get_fea_io_array_info());
+                }
+                std::vector<fea_io::ArrayInfo> surface_array_infos;
+                for (auto& output_algorithm : surface_output_algorithms)
+                {
+                    surface_array_infos.push_back(output_algorithm->get_fea_io_array_info());
                 }
 
                 // Create MeshInfo from the mesh
-                auto mesh_info = enriched_elements_mesh.get_fea_io_mesh_info();
-                auto partition_info = enriched_elements_mesh.get_fea_io_partition_info();
+                auto volume_mesh_info = enriched_elements_mesh.get_fea_io_mesh_info();
+                auto volume_partition_info = enriched_elements_mesh.get_fea_io_partition_info();
+                auto surface_mesh_info = enrichment_surfaces_mesh.get_fea_io_mesh_info();
+                auto surface_partition_info = enrichment_surfaces_mesh.get_fea_io_partition_info();
 
                 // Find number of quadrature points
-                flex_mesh::GlobalIndex n_quad_points = 0;
+                flex_mesh::GlobalIndex volume_n_quad_points = 0;
                 for (auto& e_ptr : mesh_->elements())
                 {
                     if (e_ptr->has_formulation_type<finite_element::XFEMFormulation>())
                     {
-                        n_quad_points += e_ptr->get_n_quad_points();
+                        volume_n_quad_points += e_ptr->get_n_quad_points();
                     }
                 }
 
                 // Initialize the data writer for this output step
-                writer.initialize(enriched_elements_path_stem.string(),
-                    mesh_info, partition_info, n_quad_points, array_infos);
+                volume_writer.initialize(enriched_elements_path_stem.string(),
+                    volume_mesh_info, volume_partition_info,
+                    volume_n_quad_points, volume_array_infos);
+                surface_writer.initialize(enrichment_surfaces_path_stem.string(),
+                    surface_mesh_info, surface_partition_info,
+                    0, surface_array_infos);
 
-                auto multi_field_calc = output::get_element_multi_field_calc(output_algorithms);
-
-                for (auto& output_algorithm : output_algorithms)
+                auto volume_multi_field_calc =
+                    output::get_element_multi_quantity_calc_for_volumes(volume_output_algorithms);
+                auto surface_multi_field_calc =
+                    output::get_element_multi_quantity_calc_for_surfaces(surface_output_algorithms);
+                for (auto& output_algorithm : volume_output_algorithms)
                 {
-                    output_algorithm->pre_loop_step(multi_field_calc);
+                    output_algorithm->pre_loop_step(volume_multi_field_calc);
+                }
+                for (auto& output_algorithm : surface_output_algorithms)
+                {
+                    output_algorithm->pre_loop_step(surface_multi_field_calc);
                 }
 
                 // TODO move this to assembler?
@@ -613,6 +650,7 @@ namespace fea_analysis
                     = std::make_unique<finite_element::ElementWorkspace>();
                 simple_math::GeneralVector elem_solution_vector;
                 auto curr_enriched_element_local_index = 0;
+                auto curr_enrichment_surface_local_index = 0;
                 for (auto& e_ptr : mesh_->elements())
                 {
                     if (e_ptr->has_formulation_type<finite_element::XFEMFormulation>())
@@ -631,17 +669,32 @@ namespace fea_analysis
                                 e_ptr->get_formulation());
                         for (auto leaf_index : utility::range_from_zero(xfem_form.get_n_leaves()))
                         {
-                            xfem_form.calculate(multi_field_calc, leaf_index);
+                            xfem_form.calculate(volume_multi_field_calc, leaf_index);
 
 							auto poly_e_ptr = enriched_elements_mesh.elements()[curr_enriched_element_local_index];
 
-                            for (auto& output_algorithm : output_algorithms)
+                            for (auto& output_algorithm : volume_output_algorithms)
                             {
                                 // Use the element in the polyhedral mesh for the output algorithm
-                                output_algorithm->add_element_contribution(*poly_e_ptr, multi_field_calc);
+                                output_algorithm->add_element_contribution(*poly_e_ptr, volume_multi_field_calc);
                             }
 
 							curr_enriched_element_local_index++;
+                        }
+                        for (auto enrichment_index : utility::range_from_zero(xfem_form.get_n_enrichments()))
+                        {
+                            // TODO implement this method...
+                            xfem_form.calculate(surface_multi_field_calc, enrichment_index);
+
+                            auto polygon_e_ptr = enrichment_surfaces_mesh.elements()[curr_enrichment_surface_local_index];
+                             
+                            for (auto& output_algorithm : surface_output_algorithms)
+                            {
+                                // Use the element in the polygonal mesh for the output algorithm
+                                output_algorithm->add_element_contribution(*polygon_e_ptr, surface_multi_field_calc);
+                            }
+
+                            curr_enrichment_surface_local_index++;
                         }
 
                         // End calculation block
@@ -650,13 +703,19 @@ namespace fea_analysis
                     }
                 }
 
-                for (auto& output_algorithm : output_algorithms)
+                for (auto& output_algorithm : volume_output_algorithms)
+                {
+                    output_algorithm->post_loop_step();
+                }
+                for (auto& output_algorithm : surface_output_algorithms)
                 {
                     output_algorithm->post_loop_step();
                 }
 
-                writer.close();
-                ascii_writer.close();
+                volume_writer.close();
+                volume_ascii_writer.close();
+                surface_writer.close();
+                surface_ascii_writer.close();
             }
         }
 

@@ -138,12 +138,18 @@ namespace fea_analysis
             fea_io::DataWriter<flex_mesh::GlobalIndex, flex_mesh::LocalIndex, flex_mesh::FloatType> writer;
 
             // DEBUG TODO delete
-            output_flags_.push_back(std::make_unique<output::OutputFlag>("Displacement", "Global", "Node", output_flag_cache_));
-            output_flags_.push_back(std::make_unique<output::OutputFlag>("Stress", "Global", "Element", output_flag_cache_));
-            output_flags_.push_back(std::make_unique<output::OutputFlag>("Strain", "Global", "Element", output_flag_cache_));
+            volume_output_flags_.push_back(
+                std::make_unique<output::OutputFlag<finite_element::VolumeQuantity>>(
+                    "Displacement", "Global", "Node", output_flag_cache_));
+            volume_output_flags_.push_back(
+                std::make_unique<output::OutputFlag<finite_element::VolumeQuantity>>(
+                    "Stress", "Global", "Element", output_flag_cache_));
+            volume_output_flags_.push_back(
+                std::make_unique<output::OutputFlag<finite_element::VolumeQuantity>>(
+                    "Strain", "Global", "Element", output_flag_cache_));
 
-            std::vector<output::OutputFlag*> flags_to_be_output;
-            for (auto& flag : output_flags_)
+            std::vector<output::OutputFlag<finite_element::VolumeQuantity>*> flags_to_be_output;
+            for (auto& flag : volume_output_flags_)
             {
                 if (flag->should_be_output())
                 {
@@ -157,7 +163,7 @@ namespace fea_analysis
             ascii_writer_.open((output_data_path / ".txt").string());
 
             // Create an output algorithm for each output flag involved in this write
-            auto output_algorithms = output::get_output_algorithms(ascii_writer_, writer,
+            auto output_algorithms = output::get_output_algorithms_for_volumes(ascii_writer_, writer,
                 mesh_->get_partition_id(), flags_to_be_output,
                 static_cast<flex_mesh::LocalIndex>(mesh_->nodes().size()), subcomponent_maps_);
 
@@ -182,7 +188,7 @@ namespace fea_analysis
             writer.initialize(output_data_path.string(),
                 mesh_info, partition_info, n_quad_points, array_infos);
 
-            auto multi_field_calc = output::get_element_multi_field_calc(output_algorithms);
+            auto multi_field_calc = output::get_element_multi_quantity_calc_for_volumes(output_algorithms);
 
             for (auto& output_algorithm : output_algorithms)
             {

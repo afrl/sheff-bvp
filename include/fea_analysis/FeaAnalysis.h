@@ -94,7 +94,8 @@ namespace fea_analysis
         std::unique_ptr<sparse_linear_algebra::DofMapReferences> dof_refs_;
 
         output::OutputFlagCache output_flag_cache_;
-        std::vector<std::unique_ptr<output::OutputFlag>> output_flags_;
+        std::vector<std::unique_ptr<output::OutputFlag<finite_element::VolumeQuantity>>> volume_output_flags_;
+        std::vector<std::unique_ptr<output::OutputFlag<finite_element::SurfaceQuantity>>> surface_output_flags_;
         fea_io::MetaWriter output_meta_;
         fs::path output_dir_;
         fs::path curr_time_step_dir_;
