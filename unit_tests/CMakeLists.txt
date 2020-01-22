@@ -8,7 +8,7 @@
 file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/unit_tests/Output)
 set(TEST_WORKDIR ${CMAKE_BINARY_DIR}/unit_tests/Output)
 
-file(GLOB_RECURSE _unit_tests "${CMAKE_CURRENT_SOURCE_DIR}/source/*.cpp")
+file(GLOB_RECURSE _unit_tests "${CMAKE_CURRENT_SOURCE_DIR}" "*.cpp")
 set(test_list, "")
 
 foreach(_test ${_unit_tests}) 
@@ -17,9 +17,12 @@ foreach(_test ${_unit_tests})
   # Get subdirectory name
   get_filename_component(_dir ${_test} DIRECTORY)
   get_filename_component(_category ${_dir} NAME)
+  if (${_category} STREQUAL "needs_updating")
+    continue()
+  endif()
 
   # Create executable
-  STRING(REPLACE ".cpp" "" _name fea_analysis_${_name}) 
+  STRING(REPLACE ".cpp" "" _name ${_category}_${_name})   # test name prefixed with category
   add_executable(${_name} ${_test})
   set_property(TARGET ${_name} PROPERTY FOLDER unit_tests)
   target_link_libraries(${_name} PRIVATE FeaAnalysis::FeaAnalysis)
@@ -28,9 +31,9 @@ foreach(_test ${_unit_tests})
   assign_source_group("fea_analysis" ${FEAANALYSIS_HEADER_LIST})
 
   # Create test
-  add_test(NAME "Unit_${_category}_${_name}"        # test name prefixed with Unit and category
-    COMMAND ${_name}                         # test executable
-    WORKING_DIRECTORY ${TEST_WORKDIR}        # directory to call program from and write output to
+  add_test(NAME "Unit_FeaAnalysis_${_name}"   # test name prefixed with Unit and project
+    COMMAND ${_name}                              # test executable
+    WORKING_DIRECTORY ${TEST_WORKDIR}             # directory to call program from and write output to
     )
   list(APPEND test_list "${_name}")
 endforeach()

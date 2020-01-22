@@ -3,12 +3,34 @@ cmake_minimum_required(VERSION 3.8)
 cmake_policy(SET CMP0048 NEW)
 project(FEAANALYSIS VERSION 1.0.0 LANGUAGES CXX)
 
+# Set package toolchain location for Linux. To enable efficient switching between
+# toolchains for cross-compiling, we modify the location where CMake looks for 
+# packages using the find_package command by symbolically linking the default location,
+# $HOME/.cmake/packages, to a similar location with the folder name given by the 
+# compiler family. 
+if (UNIX)
+    execute_process(COMMAND "mkdir" "-p" "$ENV{HOME}/.cmake/${CMAKE_CXX_COMPILER_ID}"
+      RESULT_VARIABLE toolchain_res OUTPUT_VARIABLE toolchain_out)
+    if (toolchain_res)
+        message(ERROR "Couldn't create toolchain dir: $ENV{HOME}/.cmake/${CMAKE_CXX_COMPILER_ID} ${toolchain_out}")
+    endif ()
+    execute_process(COMMAND "ln" "-sfn" "$ENV{HOME}/.cmake/${CMAKE_CXX_COMPILER_ID}" "$ENV{HOME}/.cmake/packages"
+      RESULT_VARIABLE toolchain_res OUTPUT_VARIABLE toolchain_out)
+    if (toolchain_res)
+        message(ERROR "Couldn't create toolchain link: $ENV{HOME}/.cmake/packages ${toolchain_out}")
+    endif ()
+endif()
+
+
 # Options
 option(FEAANALYSIS_BuildTests "Build the unit tests." OFF)
 
 # For debugging, print generator, compiler, and options
 message(STATUS "Gen: ${CMAKE_GENERATOR}, CXX: ${CMAKE_CXX_COMPILER_ID}, Mode: ${CMAKE_BUILD_TYPE}")
 message(STATUS "Tests: ${FEAANALYSIS_BuildTests}")
+
+# Add cmake dir to module path
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
 
 ##################
 # Checking input #
@@ -21,17 +43,29 @@ include(${CMAKE_SOURCE_DIR}/cmake/CommonInputChecks.cmake)
 ########################
 
 
-find_package(Utility CONFIG REQUIRED HINTS "${CMAKE_SOURCE_DIR}/../utility/build" "${CMAKE_SOURCE_DIR}/../utility/install_dir")
-find_package(SimpleMath CONFIG REQUIRED HINTS "${CMAKE_SOURCE_DIR}/../simple_math/build" "${CMAKE_SOURCE_DIR}/../simple_math/install_dir")
-find_package(Constitutive CONFIG REQUIRED HINTS "${CMAKE_SOURCE_DIR}/../constitutive/build" "${CMAKE_SOURCE_DIR}/../constitutive/install_dir")
-find_package(FlexMesh CONFIG REQUIRED HINTS "${CMAKE_SOURCE_DIR}/../flex_mesh/build" "${CMAKE_SOURCE_DIR}/../flex_mesh/install_dir")
-find_package(FeaIo CONFIG REQUIRED HINTS "${CMAKE_SOURCE_DIR}/../fea_io/build" "${CMAKE_SOURCE_DIR}/../fea_io/install_dir")
-find_package(FiniteElement CONFIG REQUIRED HINTS "${CMAKE_SOURCE_DIR}/../finite_element/build" "${CMAKE_SOURCE_DIR}/../finite_element/install_dir")
-find_package(SparseLinearAlgebra CONFIG REQUIRED HINTS "${CMAKE_SOURCE_DIR}/../sparse_linear_algebra/build" "${CMAKE_SOURCE_DIR}/../sparse_linear_algebra/install_dir")
-find_package(Output CONFIG REQUIRED HINTS "${CMAKE_SOURCE_DIR}/../output/build" "${CMAKE_SOURCE_DIR}/../output/install_dir")
-find_package(DofManager CONFIG REQUIRED HINTS "${CMAKE_SOURCE_DIR}/../dof_manager/build" "${CMAKE_SOURCE_DIR}/../dof_manager/install_dir")
-find_package(Assembler CONFIG REQUIRED HINTS "${CMAKE_SOURCE_DIR}/../assembler/build" "${CMAKE_SOURCE_DIR}/../assembler/install_dir")
-find_package(FeaCrack CONFIG REQUIRED HINTS "${CMAKE_SOURCE_DIR}/../fea_crack/build" "${CMAKE_SOURCE_DIR}/../fea_crack/install_dir")
+find_package(Utility CONFIG REQUIRED HINTS 
+  "${CMAKE_SOURCE_DIR}/../utility/install_dir" "${CMAKE_SOURCE_DIR}/../../utility/install_dir" "${CMAKE_SOURCE_DIR}/modules/utility/install_dir")
+find_package(SimpleMath CONFIG REQUIRED HINTS 
+  "${CMAKE_SOURCE_DIR}/../simple_math/install_dir" "${CMAKE_SOURCE_DIR}/../../simple_math/install_dir" "${CMAKE_SOURCE_DIR}/modules/simple_math/install_dir")
+find_package(Constitutive CONFIG REQUIRED HINTS 
+  "${CMAKE_SOURCE_DIR}/../constitutive/install_dir" "${CMAKE_SOURCE_DIR}/../../constitutive/install_dir" "${CMAKE_SOURCE_DIR}/modules/constitutive/install_dir")
+find_package(FlexMesh CONFIG REQUIRED HINTS 
+  "${CMAKE_SOURCE_DIR}/../flex_mesh/install_dir" "${CMAKE_SOURCE_DIR}/../../flex_mesh/install_dir" "${CMAKE_SOURCE_DIR}/modules/flex_mesh/install_dir")
+find_package(FeaIo CONFIG REQUIRED HINTS 
+  "${CMAKE_SOURCE_DIR}/../fea_io/install_dir" "${CMAKE_SOURCE_DIR}/../../fea_io/install_dir" "${CMAKE_SOURCE_DIR}/modules/fea_io/install_dir")
+find_package(FiniteElement CONFIG REQUIRED HINTS 
+  "${CMAKE_SOURCE_DIR}/../finite_element/install_dir" "${CMAKE_SOURCE_DIR}/../../finite_element/install_dir" "${CMAKE_SOURCE_DIR}/modules/finite_element/install_dir")
+find_package(SparseLinearAlgebra CONFIG REQUIRED HINTS 
+  "${CMAKE_SOURCE_DIR}/../sparse_linear_algebra/install_dir" "${CMAKE_SOURCE_DIR}/../../sparse_linear_algebra/install_dir" "${CMAKE_SOURCE_DIR}/modules/sparse_linear_algebra/install_dir")
+find_package(Output CONFIG REQUIRED HINTS 
+  "${CMAKE_SOURCE_DIR}/../output/install_dir" "${CMAKE_SOURCE_DIR}/../../output/install_dir" "${CMAKE_SOURCE_DIR}/modules/output/install_dir")
+find_package(DofManager CONFIG REQUIRED HINTS 
+  "${CMAKE_SOURCE_DIR}/../dof_manager/install_dir" "${CMAKE_SOURCE_DIR}/../../dof_manager/install_dir" "${CMAKE_SOURCE_DIR}/modules/dof_manager/install_dir")
+find_package(Assembler CONFIG REQUIRED HINTS 
+  "${CMAKE_SOURCE_DIR}/../assembler/install_dir" "${CMAKE_SOURCE_DIR}/../../assembler/install_dir" "${CMAKE_SOURCE_DIR}/modules/assembler/install_dir")
+find_package(FeaCrack CONFIG REQUIRED HINTS 
+  "${CMAKE_SOURCE_DIR}/../fea_crack/install_dir" "${CMAKE_SOURCE_DIR}/../../fea_crack/install_dir" "${CMAKE_SOURCE_DIR}/modules/fea_crack/install_dir")
+
 
 ################################
 # Setting up FEAANALYSIS target #
@@ -39,7 +73,6 @@ find_package(FeaCrack CONFIG REQUIRED HINTS "${CMAKE_SOURCE_DIR}/../fea_crack/bu
 
 # Set the variables for FEAANALYSIS
 set(FEAANALYSIS_INCLUDE ${CMAKE_SOURCE_DIR}/include)
-set(FEAANALYSIS_INCLUDE_SUB ${FEAANALYSIS_INCLUDE}/fea_analysis)
 set(FEAANALYSIS_SRC ${CMAKE_SOURCE_DIR}/source)
 file (GLOB_RECURSE FEAANALYSIS_HEADER_LIST "${FEAANALYSIS_INCLUDE}/*.h")
 file (GLOB_RECURSE FEAANALYSIS_SOURCE_LIST "${FEAANALYSIS_SRC}/*.h" "${FEAANALYSIS_SRC}/*.cpp")
@@ -92,7 +125,7 @@ assign_source_group_FeaCrack()
 
 
 #################################
-# Add dev and unit test targets #
+# Add unit test targets #
 #################################
 
 # Build tests
@@ -149,7 +182,7 @@ install(FILES
 # Exports #
 ###########
 
-# Export just the feaanalysis target (not the dev, tests, etc.)
+# Export just the feaanalysis target (not tests, etc.)
 export(
     TARGETS feaanalysis
     FILE ${CMAKE_CURRENT_BINARY_DIR}/FeaAnalysisTargets.cmake
