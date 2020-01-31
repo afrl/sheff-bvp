@@ -475,7 +475,7 @@ namespace fea_analysis
                     polygon_element->initialize(
                         flex_mesh::ElementType::POLYGON,
                         connectivity,
-                        flex_mesh::LCSAssignment::None);
+                        flex_mesh::LCSAssignmentType::None);
 
                     polygon_element->set_local_number(curr_surf_local_element_i++);
                     polygon_element->set_global_number(
