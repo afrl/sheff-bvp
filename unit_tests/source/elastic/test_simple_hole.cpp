@@ -1,0 +1,58 @@
+#include "../UnitTestHelpers.h"
+
+#include "fea_analysis/LinearAnalysis.h"
+#include "flex_mesh/algorithms/Creation.h"
+#include "constitutive/elasticity/LinearElasticityConstitutiveRelation.h"
+#include "fea_io/common/MPIUtils.h"
+#include "sparse_linear_algebra/LinAlgFactory.h"
+
+using namespace fea_analysis;
+
+int main(int argc, char ** argv)
+{
+    fea_io::MPIUtils::init(&argc, &argv);
+    utility::MPIUtils::init(&argc, &argv);
+    sparse_linear_algebra::LinAlgFactory::init(
+        sparse_linear_algebra::LinAlgFactory::LinAlgBackend::MKL, &argc, &argv);
+
+    // Use a single linear hex
+    auto mesh_ptr = std::make_unique<fea_analysis::Mesh>(
+        flex_mesh::make_grid<fea_analysis::Mesh>(
+            { 0, 1. / 3., 2. / 3., 1.0 },
+            { 0, 1. / 3., 2. / 3., 1.0 },
+            { 0, 1.0 },
+            false));
+    // Delete the middle element to leave a hole
+    mesh_ptr->elements().remove(mesh_ptr->elements().begin() + 4);
+    mesh_ptr->update_global_numbering();
+	auto weak_mesh_ptr = mesh_ptr.get();
+
+    // Create a constitutive relation
+    const double E = 1e9;
+    const double nu = 0.3;
+    auto properties = std::make_unique<constitutive::LinearElasticProperties>();
+    properties->set_isotropic_E_nu(E, nu);
+    properties->set_thermal_expansion_isotropic(1e-4);
+    auto constitutive_relation_ptr = std::make_unique<constitutive::LinearElasticityConstitutiveRelation>();
+    constitutive_relation_ptr->set_elastic_properties(std::move(properties));
+
+    LinearElasticAnalysis analysis;
+    analysis.set_input(
+        std::move(mesh_ptr),
+        get_test_name(__FILE__),
+        (get_output_directory(__FILE__) / "output").string());
+    analysis.add_constitutive_relation(
+        "IsotropicMaterial",
+        std::move(constitutive_relation_ptr));
+    analysis.set_elements_constitutive_relation(
+        fea_analysis::ElementSelection(),
+        "IsotropicMaterial");
+    for (auto& bc : get_unit_tension_x_bcs(*weak_mesh_ptr))
+    {
+        analysis.add_boundary_condition(std::move(bc));
+    }
+    analysis.setup_analysis();
+    analysis.solve_time_steps();
+
+    return 0;
+}
