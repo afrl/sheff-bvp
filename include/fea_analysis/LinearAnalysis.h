@@ -58,9 +58,12 @@ namespace fea_analysis
         std::unique_ptr<sparse_linear_algebra::Vector> gl_rhs_;
         std::unique_ptr<sparse_linear_algebra::SparseSolver> sparse_solver_;
 
-        /// Initialize the global matrices and vectors for the analysis
-		virtual void set_element_formulations() override;
         virtual void initialize_linear_algebra() override;
+
+        /// This method should include any tasks that need to be done at the beginning of
+        /// FeaAnalysis::solve_time_steps().  For this class, it does nothing.
+        virtual void pre_solve_tasks() override {};
+
         virtual void solve_time_step() override;
         virtual void write_output() override;
         virtual void write_restart_file() override {}

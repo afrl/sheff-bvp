@@ -3,7 +3,9 @@
 #include "assembler/SerialAssembler.h"
 #include "fea_io/meta/MetaReader.h"
 #include "flex_mesh/algorithms/IOFeaIo.h"
-#include "finite_element/BaseFormulation.h"
+
+#include "finite_element/Factory.h"
+#include "constitutive/field/FieldProperties.h"
 
 namespace fea_analysis
 {
@@ -151,27 +153,30 @@ namespace fea_analysis
         output_meta_.update_meta_file();
     }
 
-    void FeaAnalysis::add_constitutive_relation(const std::string name, std::unique_ptr<constitutive::BaseConstitutiveRelation> relation)
+    void FeaAnalysis::set_field_model(
+        finite_element::BasalFieldSelection selection,
+        const std::string& formulation_name,
+        const constitutive::FieldProperties& properties)
     {
-        constitutive_relations_[name] = std::move(relation);
+        if (mesh_ == nullptr)
+        {
+            throw _UTIL_MSG_EXCEPT_C("The mesh must be set before models can be assigned.");
+        }
+
+        field_properties_.push_back(properties.clone());
+
+        selection.run_selection(*mesh_);
+
+        auto& factory = finite_element::Factory::get();
+        for (auto selected_field : selection.get_selection())
+        {
+            factory.assign_field_model(
+                selected_field.element,
+                selected_field.index,
+                formulation_name,
+                *field_properties_.back());
+        }
     }
-
-	void FeaAnalysis::set_elements_constitutive_relation(ElementSelection selection, const std::string constitutive_relation_name)
-	{
-		auto find_iter = constitutive_relations_.find(constitutive_relation_name);
-		if (find_iter == constitutive_relations_.end())
-		{
-			throw _UTIL_MSG_EXCEPT_C("Constitutive relation \"" + constitutive_relation_name + "\" not found.");
-		}
-
-		selection.run_selection(*mesh_);
-
-		auto constitutive_relation_ptr = find_iter->second.get();
-		for (auto e_ptr : selection.get_selection())
-		{
-			e_ptr->set_constitutive_relation(constitutive_relation_ptr);
-		}
-	}
 
 	void FeaAnalysis::add_boundary_condition(std::unique_ptr<BoundaryCondition> boundary_condition)
 	{
@@ -187,16 +192,21 @@ namespace fea_analysis
 
         assembler_ = std::make_unique<assembler::SerialAssembler>(*mesh_);
 
-        set_element_formulations();
-
         // Setup the dof map and any global matrices/vectors.  The dof map will be
         // used to setup the containers.
         dof_map_ = std::make_unique<dof_manager::DofMap>(*mesh_);
         initialize_linear_algebra();
+
+        for (auto& e_ptr : mesh_->elements())
+        {
+            e_ptr->allocate_isvs();
+        }
     }
 
     void FeaAnalysis::solve_time_steps()
     {
+        pre_solve_tasks();
+
         // Time loop
         time_step_manager_->start_time_step_loop();
         do

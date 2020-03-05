@@ -1,4 +1,5 @@
-#include "fea_analysis/FractureAnalysis.h" 
+#include "fea_analysis/FractureAnalysis.h"
+
 #include "flex_mesh/maps/AdjacencyLists.h"
 #include "flex_mesh/algorithms/Search.h"
 #include "flex_mesh/element/PolyhedronElement.h"
@@ -8,14 +9,18 @@
 #include "simple_math/Utility.h"
 
 #include "finite_element/FiniteElement.h"
-#include "finite_element/BaseFormulation.h"
-#include "finite_element/elasticity/InfinitesimalStrain.h"
-#include "finite_element/damage/XFEMFormulation.h"
+#include "finite_element/field_layouts/HierarchicalFieldLayout.h"
 
 #include "sparse_linear_algebra/LinAlgFactory.h"
 
 #include "output/Output.h"
 #include "output/OutputFeaAnalysisHelpers.h"
+
+#include "constitutive/enrichment/initiation_criteria/InfiniteStrengthInitiationCriterion.h"
+#include "constitutive/enrichment/growth_criteria/AlwaysGrowGrowthCriterion.h"
+#include "constitutive/enrichment/direction_criteria/MaxPrincipalStressDirectionCriterion.h"
+
+#include "fea_crack/dof_algorithm/CGXFEMDofAlgorithm.h"
 
 #include <memory>
 
@@ -29,7 +34,6 @@ namespace fea_analysis
     {
         LinearElasticAnalysis::setup_analysis();
         adjacency_list_.initialize(*mesh_);
-        assembler_->set_element_workspaces();
 
         // Create the callback for the fea_crack module to get the element solution
         // vector when evaluating the direction criteria.
@@ -43,47 +47,71 @@ namespace fea_analysis
             *mesh_,
             adjacency_list_,
             get_element_solution_cb,
-            *dof_map_);
+            fea_crack::CGXFEMDofAlgorithm::get(*dof_map_));
 
+        dof_map_->start_enrichment_phase();
     }
 
-    void FractureAnalysis::insert_precracks(const std::vector<simple_math::Point>& initiation_points)
+    void FractureAnalysis::insert_precracks(
+        const std::vector<SurfaceInitiationAtPoint>& initations)
     {
-        dof_map_->start_enrichment_phase();
+        auto e_workspace = std::make_unique<finite_element::ElementWorkspace>();
 
-        // Initiate all of the cracks
-        for (auto i : utility::indices(initiation_points))
+        auto& factory = finite_element::Factory::get();
+        for (auto& initation : initations)
         {
-            auto new_crack_ptr = enrichment_surfaces_->add_enrichment_surface();
-            auto initial_element_ptr = flex_mesh::find_element_with_point(*mesh_, initiation_points[i]);
+            //////////////////////////////////////////////////////////////////////////////////////
+            // Create and initiate the surface
+
+            auto surface_model = factory.get_enrichment_surface_model(
+                "InfinitesimalStrain",
+                initation.properties,
+                initation.growth_criterion,
+                initation.direction_criterion);
+
+            auto& new_surface = enrichment_surfaces_->add_enrichment_surface(
+                surface_model.enrichment_model,
+                surface_model.surface_model_data);
+
+            auto initial_element_ptr = flex_mesh::find_element_with_point(*mesh_, initation.initiation_point);
             if (!initial_element_ptr)
             {
                 throw _UTIL_MSG_EXCEPT("No element was found that contains the point "
-                    + simple_math::to_string(initiation_points[i]));
+                    + simple_math::to_string(initation.initiation_point));
             }
-            auto& direction_criteria = initial_element_ptr->get_direction_criterion();
+            
+            auto& direction_criteria = initation.direction_criterion;
             simple_math::VoigtVector zero_stress = simple_math::VoigtVector::Zero(6);
-            auto crack_normal = direction_criteria.eval(new_crack_ptr->get_global_id(), initiation_points[i], zero_stress);
-            new_crack_ptr->initiate(*initial_element_ptr, 0, initiation_points[i], crack_normal);
+            auto crack_normal = direction_criteria.eval(
+                new_surface.get_global_id(),
+                initation.initiation_point,
+                zero_stress);
 
-            new_crack_ptr->write_vtk("./", 0, 0);
-        }
+            new_surface.initiate(*initial_element_ptr, 0, initation.initiation_point, crack_normal);
 
-        // Grow all the cracks one element until they can no longer grow
-        int growth_step = 1;
-        for (auto& crack : *enrichment_surfaces_)
-        {
-            auto& crack_state = crack.get_representation().get_state();
-            auto& enrichments_at_front = crack.get_enrichments_at_front();
+            enrichment_surfaces_->write_enrichments_vtk_file(
+                "./",
+                new_surface.get_global_id(), // step #
+                0);  // substep #
+
+
+            //////////////////////////////////////////////////////////////////////////////////////
+            // Grow the new surface until it cannot grow any further
+
+            auto& surface_state = new_surface.get_representation().get_state();
+            auto& enrichments_at_front = new_surface.get_enrichments_at_front();
+            int growth_step = 1;
             while (!enrichments_at_front.empty())
             {
                 std::vector<fea_crack::EnrichmentAtFront*> enrichments_at_front_to_grow;
                 for (auto& enrichment_at_front : enrichments_at_front)
                 {
                     auto& element = enrichment_at_front->get_enrichment_ref().get_element();
-                    auto& criterion = element.get_propagation_criterion();
-                    if (criterion.eval(crack_state.get_enrichment_surface_id(),
-                        element.get_mean_coordinate(), simple_math::Vector3D::Zero()))
+                    auto& criterion = enrichment_at_front->get_enrichment_ref().get().get_growth_criterion();
+                    if (criterion.eval(
+                            surface_state.get_enrichment_surface_id(),
+                            element.get_mean_coordinate(),
+                            simple_math::Vector3D::Zero()))
                     {
                         enrichments_at_front_to_grow.push_back(enrichment_at_front.get());
                     }
@@ -97,104 +125,84 @@ namespace fea_analysis
 
                 for (auto& enrichment_at_front_to_grow : enrichments_at_front_to_grow)
                 {
-                    auto search_result = crack.search_ahead_of_front(
+                    auto search_result = new_surface.search_ahead_of_front(
                         *enrichment_at_front_to_grow);
 
-                    crack.grow_crack_front_into_all_leaves(
+                    new_surface.grow_crack_front_into_all_leaves(
                         *enrichment_at_front_to_grow,
-                        search_result);
+                        search_result,
+                        *e_workspace);
                 }
-                crack.write_vtk("./", 0, growth_step);
+                
+                enrichment_surfaces_->write_enrichments_vtk_file(
+                    "./",
+                    new_surface.get_global_id(), // step #
+                    static_cast<int>(growth_step));  // substep #
+
                 growth_step++;
             }
         }
-
-        for (auto& crack : *enrichment_surfaces_)
-        {
-            crack.write_vtk("./", 0, 0);
-        }
-
-        // Change phase to static phase
-        dof_map_->start_renumber_phase();
-
-        auto& renumbering_new_rank_to_old_rank_map =
-            dof_map_->get_renumbering_new_rank_to_old_rank_map();
-        auto& renumbering_old_rank_to_global_map =
-            dof_map_->get_renumbering_old_rank_to_global_map();
-
-        gl_stiffness_->renumber_dofs(0,
-            renumbering_old_rank_to_global_map,
-            renumbering_new_rank_to_old_rank_map);
-        gl_displacement_->renumber_dofs(0,
-            renumbering_old_rank_to_global_map,
-            renumbering_new_rank_to_old_rank_map);
-        gl_rhs_->renumber_dofs(0,
-            renumbering_old_rank_to_global_map,
-            renumbering_new_rank_to_old_rank_map);
-        gl_eigenstrain_force_->renumber_dofs(0,
-            renumbering_old_rank_to_global_map,
-            renumbering_new_rank_to_old_rank_map);
-
-        dof_map_->end_renumber_phase();
     }
 
     void FractureAnalysis::insert_precracks_by_function(
-        const std::vector<LevelSetFunction>& level_set_functions)
+        const std::vector<SurfaceInsertionByLevelSet>& insertions)
     {
-        dof_map_->start_enrichment_phase();
-
-        for (auto& level_set_function : level_set_functions)
+        auto& factory = finite_element::Factory::get();
+        for (auto& insertion : insertions)
         {
-            auto new_surface_ptr = enrichment_surfaces_->add_enrichment_surface();
-            new_surface_ptr->insert_based_on_level_set(
-                level_set_function,
+            _UTIL_ASSERT_C(insertion.properties_for_fields_on_neg_side == nullptr,
+                "Right now, changing the field models based on the signed distance is not supported");
+
+            auto surface_model = factory.get_enrichment_surface_model(
+                "InfinitesimalStrain",
+                insertion.properties,
+                constitutive::AlwaysGrowGrowthCriterion(),
+                constitutive::MaxPrincipalStressDirectionCriterion());
+
+            auto& new_surface = enrichment_surfaces_->add_enrichment_surface(
+                surface_model.enrichment_model,
+                surface_model.surface_model_data);
+
+            new_surface.insert_based_on_level_set(
+                insertion.level_set_function,
                 [](const simple_math::Point&) { return true; });
+
+            enrichment_surfaces_->write_enrichments_vtk_file(
+                "./",
+                new_surface.get_global_id(), // step #
+                0);  // substep #
+
         }
-
-        for (auto& crack : *enrichment_surfaces_)
-        {
-            crack.write_vtk("./", 0, 0);
-        }
-
-        // Change phase to static phase
-        dof_map_->start_renumber_phase();
-
-        auto& renumbering_new_rank_to_old_rank_map =
-            dof_map_->get_renumbering_new_rank_to_old_rank_map();
-        auto& renumbering_old_rank_to_global_map =
-            dof_map_->get_renumbering_old_rank_to_global_map();
-
-        gl_stiffness_->renumber_dofs(0,
-            renumbering_old_rank_to_global_map,
-            renumbering_new_rank_to_old_rank_map);
-        gl_displacement_->renumber_dofs(0,
-            renumbering_old_rank_to_global_map,
-            renumbering_new_rank_to_old_rank_map);
-        gl_rhs_->renumber_dofs(0,
-            renumbering_old_rank_to_global_map,
-            renumbering_new_rank_to_old_rank_map);
-        gl_eigenstrain_force_->renumber_dofs(0,
-            renumbering_old_rank_to_global_map,
-            renumbering_new_rank_to_old_rank_map);
-
-        dof_map_->end_renumber_phase();
     }
 
     void FractureAnalysis::insert_precracks_by_function_outside_previous(
-        const std::vector<LevelSetFunction>& level_set_functions)
+        const std::vector<SurfaceInsertionByLevelSet>& insertions)
     {
-        dof_map_->start_enrichment_phase();
-
-        for (auto i : utility::indices(level_set_functions))
+        auto& factory = finite_element::Factory::get();
+        for (auto i : utility::indices(insertions))
         {
-            auto new_surface_ptr = enrichment_surfaces_->add_enrichment_surface();
-            new_surface_ptr->insert_based_on_level_set(
-                level_set_functions[i],
-                [&level_set_functions, &i](const simple_math::Point& p)
+            auto& insertion = insertions[i];
+
+            _UTIL_ASSERT_C(insertion.properties_for_fields_on_neg_side == nullptr,
+                "Right now, changing the field models based on the signed distance is not supported");
+
+            auto surface_model = factory.get_enrichment_surface_model(
+                "InfinitesimalStrain",
+                insertion.properties,
+                constitutive::AlwaysGrowGrowthCriterion(),
+                constitutive::MaxPrincipalStressDirectionCriterion());
+
+            auto& new_surface = enrichment_surfaces_->add_enrichment_surface(
+                surface_model.enrichment_model,
+                surface_model.surface_model_data);
+
+            new_surface.insert_based_on_level_set(
+                insertion.level_set_function,
+                [&insertions, &i](const simple_math::Point& p)
                 {
                     for (auto j : utility::range_from_zero(i))
                     {
-                        if (level_set_functions[j](p) <= 0.0)
+                        if (insertions[j].level_set_function(p) <= 0.0)
                         {
                             return false;
                         }
@@ -202,49 +210,27 @@ namespace fea_analysis
                     return true;
                 },
                 false);
+
+            enrichment_surfaces_->write_enrichments_vtk_file(
+                "./",
+                new_surface.get_global_id(), // step #
+                0);  // substep #
+
         }
-
-        for (auto& crack : *enrichment_surfaces_)
-        {
-            crack.write_vtk("./", 0, 0);
-        }
-
-        // Change phase to static phase
-        dof_map_->start_renumber_phase();
-
-        auto& renumbering_new_rank_to_old_rank_map =
-            dof_map_->get_renumbering_new_rank_to_old_rank_map();
-        auto& renumbering_old_rank_to_global_map =
-            dof_map_->get_renumbering_old_rank_to_global_map();
-
-        gl_stiffness_->renumber_dofs(0,
-            renumbering_old_rank_to_global_map,
-            renumbering_new_rank_to_old_rank_map);
-        gl_displacement_->renumber_dofs(0,
-            renumbering_old_rank_to_global_map,
-            renumbering_new_rank_to_old_rank_map);
-        gl_rhs_->renumber_dofs(0,
-            renumbering_old_rank_to_global_map,
-            renumbering_new_rank_to_old_rank_map);
-        gl_eigenstrain_force_->renumber_dofs(0,
-            renumbering_old_rank_to_global_map,
-            renumbering_new_rank_to_old_rank_map);
-
-        dof_map_->end_renumber_phase();
     }
 
     void FractureAnalysis::insert_precracks_by_function_with_boolean(
-        const std::vector<LevelSetFunction>& level_set_functions)
+        const std::vector<SurfaceInsertionByLevelSet>& insertions)
     {
         // TODO relax this with further development.
-        if (level_set_functions.size() != 2)
+        if (insertions.size() != 2)
         {
             // Throw error
         }
 
         // TODO
-        auto& f1 = level_set_functions[0];
-        auto& f2 = level_set_functions[1];
+        auto& f1 = insertions[0].level_set_function;
+        auto& f2 = insertions[1].level_set_function;
         LevelSetFunction f1_wrapped =
             [&f1, &f2](const simple_math::Point& p) -> const double
             {
@@ -259,15 +245,28 @@ namespace fea_analysis
                 }
             };
 
-        dof_map_->start_enrichment_phase();
+        auto& factory = finite_element::Factory::get();
+
+        auto surface_model = factory.get_enrichment_surface_model(
+            "InfinitesimalStrain",
+            insertions[0].properties,
+            constitutive::AlwaysGrowGrowthCriterion(),
+            constitutive::MaxPrincipalStressDirectionCriterion());
 
         // Insert surface for f1 (including boolean)
         {
-            auto new_surface_ptr = enrichment_surfaces_->add_enrichment_surface();
-            new_surface_ptr->insert_based_on_level_set(
+            auto& new_surface = enrichment_surfaces_->add_enrichment_surface(
+                surface_model.enrichment_model,
+                surface_model.surface_model_data);
+            new_surface.insert_based_on_level_set(
                 f1_wrapped,
                 [](const simple_math::Point& p) { return true; });
         }
+
+        enrichment_surfaces_->write_enrichments_vtk_file(
+            "./",
+            0, // step #
+            0);  // substep #
 
         // Insert surface for f2
         {
@@ -286,8 +285,10 @@ namespace fea_analysis
                 }
             };
 
-            auto new_surface_ptr = enrichment_surfaces_->add_enrichment_surface();
-            new_surface_ptr->insert_based_on_level_set(
+            auto& new_surface = enrichment_surfaces_->add_enrichment_surface(
+                surface_model.enrichment_model,
+                surface_model.surface_model_data);
+            new_surface.insert_based_on_level_set(
                 f2,
                 [f1, f1_wrapped](const simple_math::Point& p) -> const bool {
                     const double f1_val = f1(p);
@@ -305,11 +306,14 @@ namespace fea_analysis
                 false);
         }
 
-        for (auto& crack : *enrichment_surfaces_)
-        {
-            crack.write_vtk("./", 0, 0);
-        }
+        enrichment_surfaces_->write_enrichments_vtk_file(
+            "./",
+            0, // step #
+            1);  // substep #
+    }
 
+    void FractureAnalysis::pre_solve_tasks()
+    {
         // Change phase to static phase
         dof_map_->start_renumber_phase();
 
@@ -378,13 +382,14 @@ namespace fea_analysis
         flex_mesh::LocalIndex curr_surf_local_element_i = 0;
         for (auto& e_ptr : original_mesh.elements())
         {
-            if (e_ptr->has_formulation_type<finite_element::XFEMFormulation>())
+            if (e_ptr->get_n_enrichments() > 0)
             {
-                auto& xfem_form =
-                    static_cast<const finite_element::XFEMFormulation&>(
-                        e_ptr->get_formulation_const());
-                auto tree_traverser = xfem_form.get_tree_traverser();
-                auto& integration_domains = xfem_form.get_integration_domains();
+                finite_element::EnrichmentTreeTraverser tree_traverser(*e_ptr);
+
+                auto& hhe_layout = dynamic_cast<const finite_element::HierarchicalFieldLayout&>(
+                    e_ptr->get_field_layout());
+                auto& integration_domains = hhe_layout.get_integration_domains();
+
                 auto& points = integration_domains.get_points();
 
                 flex_mesh::NodeX3Matrix node_coords;
@@ -392,7 +397,7 @@ namespace fea_analysis
 
                 // Add nodes and elements for the integration domain of each field
                 // Fills enriched_elements_mesh
-                for (auto leaf_index : utility::range_from_zero(xfem_form.get_n_leaves()))
+                for (auto leaf_index : utility::range_from_zero(e_ptr->get_n_basal_fields()))
                 {
                     auto leaf_info = tree_traverser.get_leaf(leaf_index);
                     auto& polyhedron = integration_domains.get_polyhedra()[leaf_info.field_index];
@@ -441,50 +446,53 @@ namespace fea_analysis
                     poly_element->set_local_number(curr_local_element_i++);
                     poly_element->set_global_number(e_ptr->get_global_number());
                     poly_element->set_component_id(e_ptr->get_component_id());
-;                   enriched_elements_mesh.elements().add(std::move(poly_element));
+                    enriched_elements_mesh.elements().add(std::move(poly_element));
                 }
 
                 // Add nodes and elements for each enrichment
                 // Fills enrichment_surfaces_mesh
                 auto& enrichment_facets = integration_domains.get_enrichment_facets();
-                for (auto enrichment_index : utility::range_from_zero(xfem_form.get_n_enrichments()))
+                for (auto enrichment_index : utility::range_from_zero(e_ptr->get_n_enrichments()))
                 {
-                    auto& facet_point_indices = enrichment_facets[enrichment_index];
-                    
-                    std::vector<Node*> connectivity;
-                    for (auto i : facet_point_indices)
+                    auto patches = integration_domains.get_enrichment_patches(enrichment_index);
+                    for (auto& patch : patches)
                     {
-                        // The points of the integration domain is in the parametric coordinate
-                        // system, so they need to be transformed to the global for plotting.
-                        auto p = integration_domains.get_points()[i];
-                        auto shape_function_values =
-                            e_ptr->get_shape_function_values(p);
-
-                        simple_math::Point global_p;
-                        for (auto i = 0; i < 3; i++)
+                        std::vector<Node*> connectivity;
+                        auto& points = patch.points;
+                        for (auto i : utility::indices(points))
                         {
-                            global_p[i] = shape_function_values.dot(node_coords.col(i));
+                            // The points of the integration domain is in the parametric coordinate
+                            // system, so they need to be transformed to the global for plotting.
+                            auto& p = points[i];
+                            auto shape_function_values =
+                                e_ptr->get_shape_function_values(p);
+
+                            simple_math::Point global_p;
+                            for (auto i = 0; i < 3; i++)
+                            {
+                                global_p[i] = shape_function_values.dot(node_coords.col(i));
+                            }
+
+                            connectivity.push_back(
+                                enrichment_surfaces_mesh.add_node_by_coord(global_p));
+                            connectivity.back()->set_local_number(curr_surf_local_node_i++);
                         }
 
-                        connectivity.push_back(
-                            enrichment_surfaces_mesh.add_node_by_coord(global_p));
-                        connectivity.back()->set_local_number(curr_surf_local_node_i++);
-                    }
+                        auto polygon_element = std::make_unique<flex_mesh::Element<Node>>();
+                        polygon_element->initialize(
+                            flex_mesh::ElementType::POLYGON,
+                            connectivity,
+                            flex_mesh::LCSAssignmentType::None);
 
-                    auto polygon_element = std::make_unique<flex_mesh::Element<Node>>();
-                    polygon_element->initialize(
-                        flex_mesh::ElementType::POLYGON,
-                        connectivity,
-                        flex_mesh::LCSAssignmentType::None);
-
-                    polygon_element->set_local_number(curr_surf_local_element_i++);
-                    polygon_element->set_global_number(
-                        tree_traverser.get_enrichment_ref(enrichment_index).get_data().surface_id);
-                    polygon_element->set_component_id(e_ptr->get_component_id());
-                    // Right now, this throws off the reader since the component selection
-                    // does not apply to enrichment surfaces.  How do we want to indicate surface?
+                        polygon_element->set_local_number(curr_surf_local_element_i++);
+                        polygon_element->set_global_number(
+                            tree_traverser.get_enrichment_ref(enrichment_index).get().surface_id);
+                        polygon_element->set_component_id(e_ptr->get_component_id());
+                        // Right now, this throws off the reader since the component selection
+                        // does not apply to enrichment surfaces.  How do we want to indicate surface?
                         //tree_traverser.get_enrichment(enrichment_index).enrichment_surface_id);
-                    enrichment_surfaces_mesh.elements().add(std::move(polygon_element));
+                        enrichment_surfaces_mesh.elements().add(std::move(polygon_element));
+                    }
                 }
             }
         }
@@ -618,9 +626,12 @@ namespace fea_analysis
                 flex_mesh::GlobalIndex volume_n_quad_points = 0;
                 for (auto& e_ptr : mesh_->elements())
                 {
-                    if (e_ptr->has_formulation_type<finite_element::XFEMFormulation>())
+                    if (e_ptr->get_n_enrichments() > 0)
                     {
-                        volume_n_quad_points += e_ptr->get_n_quad_points();
+                        for (auto& basal_field : e_ptr->basal_fields())
+                        {
+                            volume_n_quad_points += basal_field.model_data.isv.size();
+                        }
                     }
                 }
 
@@ -632,17 +643,17 @@ namespace fea_analysis
                     surface_mesh_info, surface_partition_info,
                     0, surface_array_infos);
 
-                auto volume_multi_field_calc =
-                    output::get_element_multi_quantity_calc_for_volumes(volume_output_algorithms);
-                auto surface_multi_field_calc =
-                    output::get_element_multi_quantity_calc_for_surfaces(surface_output_algorithms);
+                auto volume_calc_flags =
+                    output::get_calc_flags_for_volumes(volume_output_algorithms);
+                auto surface_calc_flags =
+                    output::get_calc_flags_for_surfaces(surface_output_algorithms);
                 for (auto& output_algorithm : volume_output_algorithms)
                 {
-                    output_algorithm->pre_loop_step(volume_multi_field_calc);
+                    output_algorithm->pre_loop_step(volume_calc_flags);
                 }
                 for (auto& output_algorithm : surface_output_algorithms)
                 {
-                    output_algorithm->pre_loop_step(surface_multi_field_calc);
+                    output_algorithm->pre_loop_step(surface_calc_flags);
                 }
 
                 // TODO move this to assembler?
@@ -653,52 +664,62 @@ namespace fea_analysis
                 auto curr_enrichment_surface_local_index = 0;
                 for (auto& e_ptr : mesh_->elements())
                 {
-                    if (e_ptr->has_formulation_type<finite_element::XFEMFormulation>())
+                    if (e_ptr->get_n_enrichments() > 0)
                     {
                         // Provide the current solution in case the element requries it.
                         elem_solution_vector = gl_displacement_->get_element_part(e_ptr->get_local_number());
 
-                        // This should be separated out in the future, but for now provide the workspace
-                        e_ptr->set_workspace(element_workspace_ptr.get());
-
                         // Start calculation block
-                        e_ptr->start_calculations(elem_solution_vector);
+                        e_ptr->start_calculations(
+                            *element_workspace_ptr,
+                            elem_solution_vector);
 
-                        auto& xfem_form =
-                            static_cast<finite_element::XFEMFormulation&>(
-                                e_ptr->get_formulation());
-                        for (auto leaf_index : utility::range_from_zero(xfem_form.get_n_leaves()))
+                        for (auto leaf_index : utility::range_from_zero(e_ptr->get_n_basal_fields()))
                         {
-                            xfem_form.calculate(volume_multi_field_calc, leaf_index);
+                            auto results = e_ptr->calculate(
+                                volume_calc_flags,
+                                leaf_index,
+                                *element_workspace_ptr);
 
 							auto poly_e_ptr = enriched_elements_mesh.elements()[curr_enriched_element_local_index];
 
                             for (auto& output_algorithm : volume_output_algorithms)
                             {
                                 // Use the element in the polyhedral mesh for the output algorithm
-                                output_algorithm->add_element_contribution(*poly_e_ptr, volume_multi_field_calc);
+                                output_algorithm->add_element_contribution(*poly_e_ptr, results);
                             }
 
 							curr_enriched_element_local_index++;
                         }
-                        for (auto enrichment_index : utility::range_from_zero(xfem_form.get_n_enrichments()))
+                        for (auto enrichment_index : utility::range_from_zero(e_ptr->get_n_enrichments()))
                         {
-                            // TODO implement this method...
-                            xfem_form.calculate(surface_multi_field_calc, enrichment_index);
+                            finite_element::EnrichmentTreeTraverser tree_traverser(*e_ptr);
 
-                            auto polygon_e_ptr = enrichment_surfaces_mesh.elements()[curr_enrichment_surface_local_index];
-                             
-                            for (auto& output_algorithm : surface_output_algorithms)
+                            auto& hhe_layout = dynamic_cast<const finite_element::HierarchicalFieldLayout&>(
+                                e_ptr->get_field_layout());
+                            auto& integration_domains = hhe_layout.get_integration_domains();
+
+                            auto patch_results = e_ptr->calculate(
+                                surface_calc_flags,
+                                enrichment_index,
+                                *element_workspace_ptr);
+
+                            for (auto patch_index : utility::indices(patch_results))
                             {
-                                // Use the element in the polygonal mesh for the output algorithm
-                                output_algorithm->add_element_contribution(*polygon_e_ptr, surface_multi_field_calc);
-                            }
+                                auto polygon_e_ptr = enrichment_surfaces_mesh.elements()[curr_enrichment_surface_local_index];
 
-                            curr_enrichment_surface_local_index++;
+                                for (auto& output_algorithm : surface_output_algorithms)
+                                {
+                                    // Use the element in the polygonal mesh for the output algorithm
+                                    output_algorithm->add_element_contribution(*polygon_e_ptr, patch_results[patch_index]);
+                                }
+
+                                curr_enrichment_surface_local_index++;
+                            }
                         }
 
                         // End calculation block
-                        e_ptr->end_calculations();
+                        e_ptr->end_calculations(*element_workspace_ptr);
 
                     }
                 }
@@ -729,37 +750,15 @@ namespace fea_analysis
         //////////////
 
         // Queue assembly of the global stiffness matrix
-        assembler_->queue_matrix_assembly(
-            gl_stiffness_.get(),
-            [](finite_element::FiniteElement & fe) -> auto
-        {
-            auto element_matrix = fe.get_formulation().get_element_matrix();
-
-            //std::string output_path = "ElementStiffness_" + std::to_string(fe.get_global_number()) + ".txt";
-            //std::ofstream output_stream(output_path);
-            //output_stream << element_matrix.str() << std::endl;
-            //output_stream.close();
-
-            return element_matrix;
-        });
-
-        /*
-        {
-            std::string output_path = "DoFMaps.txt";
-            std::ofstream output_stream(output_path);
-            output_stream << dof_map_->str() << std::endl;
-            output_stream.close();
-        }
-        */
+        assembler_->queue_assembly(
+            finite_element::FEMatricesAndVectors::Flags::LHSMatrix,
+            gl_stiffness_.get());
 
         // Queue assembly of the global vector containing RHS terms pertaining
         // to eigenstrains (such as thermal strain, plastic strain, etc.)
-        assembler_->queue_vector_assembly(
-            gl_eigenstrain_force_.get(),
-            [](finite_element::FiniteElement& fe) -> auto
-        {
-            return fe.get_formulation().get_element_rhs_vector();
-        });
+        assembler_->queue_assembly(
+            finite_element::FEMatricesAndVectors::Flags::RHSVector,
+            gl_eigenstrain_force_.get());
 
         // Execute both assemblies as one element loop
         assembler_->execute(gl_displacement_.get());
@@ -798,13 +797,14 @@ namespace fea_analysis
             // Provide the current solution in case the element requries it.
             auto elem_solution_vector = gl_displacement_->get_element_part(e_ptr->get_local_number());
 
-            // This should be separated out in the future, but for now provide the workspace
-            e_ptr->set_workspace(element_workspace_ptr.get());
-
             // Start calculation block
-            e_ptr->start_calculations(elem_solution_vector);
+            e_ptr->start_calculations(
+                *element_workspace_ptr,
+                elem_solution_vector);
 
-            auto& formulation = e_ptr->get_formulation();
+            // TODO check initiation criterion in each field here to see if it is met
+            // and if so, insert a crack.
+            /* Old code as an (albiet poor) example
             auto elastic_formulation = dynamic_cast<finite_element::InfinitesimalStrainFormulation*>(&formulation);
             if (elastic_formulation)
             {
@@ -840,9 +840,10 @@ namespace fea_analysis
                     }
                 }
             }
+            */
 
             // End calculation block
-            e_ptr->end_calculations();
+            e_ptr->end_calculations(*element_workspace_ptr);
         }
         return successful;
     }

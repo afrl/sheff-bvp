@@ -1,8 +1,6 @@
 #include "fea_analysis/LinearAnalysis.h"
 
 #include "finite_element/FiniteElement.h"
-#include "finite_element/BaseFormulation.h"
-#include "finite_element/elasticity/InfinitesimalStrain.h"
 
 #include "sparse_linear_algebra/LinAlgFactory.h"
 
@@ -11,17 +9,6 @@
 
 namespace fea_analysis
 {
-	void LinearElasticAnalysis::set_element_formulations()
-	{
-		// For a linear analysis, for now, assume all elements get an InfinitesmalStrain formulation
-		for (auto& e_ptr : mesh_->elements())
-		{
-			auto formulation = std::unique_ptr<finite_element::BaseFormulation>(new finite_element::InfinitesimalStrainFormulation(e_ptr.get()));
-			e_ptr->set_formulation(std::move(formulation));
-			e_ptr->allocate_isvs();
-		}
-	}
-
 	void LinearElasticAnalysis::initialize_linear_algebra()
     {
         dof_refs_ = std::make_unique<sparse_linear_algebra::DofMapReferences>(
@@ -70,21 +57,15 @@ namespace fea_analysis
         //////////////
 
         // Queue assembly of the global stiffness matrix
-        assembler_->queue_matrix_assembly(
-            gl_stiffness_.get(),
-            [](finite_element::FiniteElement& fe) -> auto
-            {
-                return fe.get_formulation().get_element_matrix();
-            });
+        assembler_->queue_assembly(
+            finite_element::FEMatricesAndVectors::Flags::LHSMatrix,
+            gl_stiffness_.get());
 
         // Queue assembly of the global vector containing RHS terms pertaining
         // to eigenstrains (such as thermal strain, plastic strain, etc.)
-        assembler_->queue_vector_assembly(
-            gl_eigenstrain_force_.get(),
-            [](finite_element::FiniteElement& fe) -> auto
-            {
-                return fe.get_formulation().get_element_rhs_vector();
-            });
+        assembler_->queue_assembly(
+            finite_element::FEMatricesAndVectors::Flags::RHSVector,
+            gl_eigenstrain_force_.get());
 
         // Execute both assemblies as one element loop
         assembler_->execute(gl_displacement_.get());
@@ -181,18 +162,21 @@ namespace fea_analysis
             flex_mesh::GlobalIndex n_quad_points = 0;
             for (auto& e_ptr : mesh_->elements())
             {
-                n_quad_points += e_ptr->get_n_quad_points();
+                for (auto& basal_field : e_ptr->basal_fields())
+                {
+                    n_quad_points += basal_field.model_data.isv.size();
+                }
             }
 
             // Initialize the data writer for this output step
             writer.initialize(output_data_path.string(),
                 mesh_info, partition_info, n_quad_points, array_infos);
 
-            auto multi_field_calc = output::get_element_multi_quantity_calc_for_volumes(output_algorithms);
+            auto volume_calc_flags = output::get_calc_flags_for_volumes(output_algorithms);
 
             for (auto& output_algorithm : output_algorithms)
             {
-                output_algorithm->pre_loop_step(multi_field_calc);
+                output_algorithm->pre_loop_step(volume_calc_flags);
             }
 
             // TODO move this to assembler?
@@ -204,21 +188,20 @@ namespace fea_analysis
                 // Provide the current solution in case the element requries it.
                 elem_solution_vector = gl_displacement_->get_element_part(e_ptr->get_local_number());
 
-                // This should be separated out in the future, but for now provide the workspace
-                e_ptr->set_workspace(element_workspace_ptr.get());
-
                 // Start calculation block
-                e_ptr->start_calculations(elem_solution_vector);
+                e_ptr->start_calculations(
+                    *element_workspace_ptr,
+                    elem_solution_vector);
 
                 auto e_number = e_ptr->get_global_number();
-                e_ptr->get_formulation().calculate(multi_field_calc);
+                auto results = e_ptr->calculate(volume_calc_flags, *element_workspace_ptr);
 
                 // End calculation block
-                e_ptr->end_calculations();
+                e_ptr->end_calculations(*element_workspace_ptr);
 
                 for (auto& output_algorithm : output_algorithms)
                 {
-                    output_algorithm->add_element_contribution(*e_ptr, multi_field_calc);
+                    output_algorithm->add_element_contribution(*e_ptr, results);
                 }
             }
 

@@ -1,7 +1,7 @@
 #pragma once
 
 #include "finite_element/FiniteElement.h"
-#include "constitutive/BaseConstitutiveRelation.h"
+#include "finite_element/hhe_primitives/BasalFieldSelection.h"
 #include "assembler/Assembler.h"
 #include "dof_manager/DofMap.h"
 #include "flex_mesh/maps/SubcomponentMaps.h"
@@ -54,11 +54,25 @@ namespace fea_analysis
             std::unique_ptr<Mesh> mesh,
             const std::string analysis_name,
             const std::string output_dir_path);
-        /// Add a constitutive relation to the analysis
-        void add_constitutive_relation(const std::string constitutive_relation_name,
-            std::unique_ptr<constitutive::BaseConstitutiveRelation>);
-        void set_elements_constitutive_relation(ElementSelection selection,
-            const std::string constitutive_relation_name);
+        /// Sets the model for basal fields based on the formulation type and properties.
+        /// Setting the model includes the point-wise model, the finite element model, and
+        /// all model data.  The combination of objects that compose the model is determined
+        /// based on the combination fo the formulation and properties given.
+        ///
+        /// \param selection - the selection object that will return the basal fields to assign
+        ///        a field model to based on the other given options.
+        /// \param formulation_name - valid options for formulations currently include:
+        ///        - "InfinitesimalStrain"
+        /// \param properties - the properties to be assigned to the basal fields.  This
+        ///        analysis object makes a deep copy of the properties to ensure it will
+        ///        be persistent throughout the analysis.  A copy is created for each call,
+        ///        so be cognizant that calling this method many times with the same properties
+        ///        object will be far less memory-efficient than calling it once with a more
+        ///        complex selection.
+        void set_field_model(
+            finite_element::BasalFieldSelection selection,
+            const std::string& formulation_name,
+            const constitutive::FieldProperties& properties);
         /// A boundary condition to the analysis
         /// Note: the BoundaryCondition object will store what constraints it creates based
         /// on the Node selection given to it when constructed.
@@ -85,7 +99,7 @@ namespace fea_analysis
         std::unique_ptr<assembler::Assembler> assembler_;
         std::unique_ptr<dof_manager::DofMap> dof_map_;
         std::vector<std::unique_ptr<BoundaryCondition>> boundary_conditions_;
-        std::map<std::string, std::unique_ptr<constitutive::BaseConstitutiveRelation>> constitutive_relations_;
+        std::vector<std::unique_ptr<constitutive::FieldProperties>> field_properties_;
 		/// The global constraint matrix.  Right now, the interface for adding boundary conditions only allows
 		/// for one constraint matrix.  So this property is put here instead of in a derived class.  If the
 		/// interface is generalized to have multiple constraint matrices, then this will need to be moved.
@@ -100,9 +114,11 @@ namespace fea_analysis
         fs::path output_dir_;
         fs::path curr_time_step_dir_;
 
-		virtual void set_element_formulations() = 0;
         virtual void initialize_linear_algebra() = 0;
         virtual void apply_boundary_conditions();
+        /// This method should include any tasks that need to be done at the beginning
+        /// of FeaAnalysis::solve_time_steps()
+        virtual void pre_solve_tasks() = 0;
         virtual void solve_time_step() = 0;
         virtual void write_output() = 0;
         virtual void write_restart_file() = 0;

@@ -4,7 +4,7 @@
 #include "flex_mesh/algorithms/UnitElements.h"
 #include "flex_mesh/algorithms/IO.h"
 #include "flex_mesh/algorithms/Search.h"
-#include "constitutive/elasticity/LinearElasticityConstitutiveRelation.h"
+#include "constitutive/field/deformation/linear_elasticity/LinearElasticProperties.h"
 #include "fea_io/common/MPIUtils.h"
 #include "sparse_linear_algebra/LinAlgFactory.h"
 
@@ -21,14 +21,12 @@ int main(int argc, char ** argv)
     // Create a constitutive relation
     const double E = 1e9;
     const double nu = 0.3;
-    auto properties = std::make_unique<constitutive::LinearElasticProperties>();
-    properties->set_orthotropic(
+    constitutive::LinearElasticProperties properties;
+    properties.set_orthotropic(
         221400000000, 12600000000, 12600000000, // E11, E22, E33
         0.34, 0.34, 0.32, // nu12, nu13, nu23
         7400000000, 7400000000, 4772700000); // G12, G13, G23
-    properties->set_thermal_expansion_isotropic(1e-4);
-    auto constitutive_relation_ptr = std::make_unique<constitutive::LinearElasticityConstitutiveRelation>();
-    constitutive_relation_ptr->set_elastic_properties(std::move(properties));
+    properties.set_thermal_expansion_isotropic(1e-4);
 
     // Create the boundary conditions
     // Fix u along the x = -1 side
@@ -53,8 +51,7 @@ int main(int argc, char ** argv)
         "",
         get_test_data_filepath("bar_with_hole"),
         (get_output_directory(__FILE__) / "output").string());
-    analysis.add_constitutive_relation("IsotropicMaterial", std::move(constitutive_relation_ptr));
-    analysis.set_elements_constitutive_relation(fea_analysis::ElementSelection(), "IsotropicMaterial");
+    analysis.set_field_model(finite_element::BasalFieldSelection(), "InfinitesimalStrain", properties);
     analysis.add_boundary_condition(std::move(fix_u_at_x_neg_1));
     analysis.add_boundary_condition(std::move(fix_v_at_x_neg_1));
     analysis.add_boundary_condition(std::move(fix_w_at_x_neg_1));
