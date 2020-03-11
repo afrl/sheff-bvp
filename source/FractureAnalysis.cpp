@@ -156,8 +156,8 @@ namespace fea_analysis
             auto surface_model = factory.get_enrichment_surface_model(
                 "InfinitesimalStrain",
                 insertion.properties,
-                constitutive::AlwaysGrowGrowthCriterion(),
-                constitutive::MaxPrincipalStressDirectionCriterion());
+                constitutive::AlwaysGrowGrowthCriterion::get(),
+                constitutive::MaxPrincipalStressDirectionCriterion::get());
 
             auto& new_surface = enrichment_surfaces_->add_enrichment_surface(
                 surface_model.enrichment_model,
@@ -189,8 +189,8 @@ namespace fea_analysis
             auto surface_model = factory.get_enrichment_surface_model(
                 "InfinitesimalStrain",
                 insertion.properties,
-                constitutive::AlwaysGrowGrowthCriterion(),
-                constitutive::MaxPrincipalStressDirectionCriterion());
+                constitutive::AlwaysGrowGrowthCriterion::get(),
+                constitutive::MaxPrincipalStressDirectionCriterion::get());
 
             auto& new_surface = enrichment_surfaces_->add_enrichment_surface(
                 surface_model.enrichment_model,
@@ -250,8 +250,8 @@ namespace fea_analysis
         auto surface_model = factory.get_enrichment_surface_model(
             "InfinitesimalStrain",
             insertions[0].properties,
-            constitutive::AlwaysGrowGrowthCriterion(),
-            constitutive::MaxPrincipalStressDirectionCriterion());
+            constitutive::AlwaysGrowGrowthCriterion::get(),
+            constitutive::MaxPrincipalStressDirectionCriterion::get());
 
         // Insert surface for f1 (including boolean)
         {
