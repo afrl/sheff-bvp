@@ -66,18 +66,19 @@ int main(int argc, char ** argv)
             throw _UTIL_MSG_EXCEPT("Unknown crack");
         }
     });
+    constitutive::TractionFreeInterfaceProperties enrichment_properties;
 
     analysis.setup_analysis();
     analysis.insert_precracks({
             { // surface 0
                 { 1.5, 0.2, 2.5 }, // initation_point
-                constitutive::TractionFreeInterfaceProperties(),
+                enrichment_properties,
                 growth_criterion,
                 direction_criterion
             },
             { // surface 1
                 { 1.5, 0.2, 1.5 }, // initation_point
-                constitutive::TractionFreeInterfaceProperties(),
+                enrichment_properties,
                 growth_criterion,
                 direction_criterion
             }
