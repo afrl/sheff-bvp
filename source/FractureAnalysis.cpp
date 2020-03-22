@@ -502,6 +502,10 @@ namespace fea_analysis
     {
         LinearElasticAnalysis::write_output();
 
+        surface_output_flags_.push_back(
+            std::make_unique<output::OutputFlag<finite_element::SurfaceQuantity>>(
+                "DisplacementJump", "Global", "Node", output_flag_cache_));
+
         auto& output_meta_info = output_meta_.get_analysis_meta();
         auto& time_step_info = output_meta_.get_time_step(
             time_step_manager_->get_time_step(),
@@ -531,7 +535,7 @@ namespace fea_analysis
         fea_io::MeshObject enrichment_surfaces_mesh_object;
         enrichment_surfaces_mesh_object.type = fea_io::MeshObjectType::Surface;
         enrichment_surfaces_mesh_object.mesh_path = enrichment_surfaces_rel_stem;
-        enriched_elements_mesh_object.data_paths.push_back(enrichment_surfaces_rel_stem);
+        enrichment_surfaces_mesh_object.data_paths.push_back(enrichment_surfaces_rel_stem);
 
         // Update the time step info
         time_step_info.levels_of_detail.push_back({
