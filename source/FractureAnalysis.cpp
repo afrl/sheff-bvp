@@ -505,6 +505,9 @@ namespace fea_analysis
         surface_output_flags_.push_back(
             std::make_unique<output::OutputFlag<finite_element::SurfaceQuantity>>(
                 "DisplacementJump", "Global", "Node", output_flag_cache_));
+        surface_output_flags_.push_back(
+            std::make_unique<output::OutputFlag<finite_element::SurfaceQuantity>>(
+                "EnrichmentSurfaceID", "", "Element", output_flag_cache_));
 
         auto& output_meta_info = output_meta_.get_analysis_meta();
         auto& time_step_info = output_meta_.get_time_step(
