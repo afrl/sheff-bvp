@@ -56,13 +56,14 @@ int main(int argc, char ** argv)
     {
         return simple_math::Vector3D(1, 0, 0);
     });
+    constitutive::TractionFreeInterfaceProperties enrichment_properties;
 
     analysis.setup_analysis();
     simple_math::Point initial_coord = { 1.525, 0.2, 0.2 };
     analysis.insert_precracks({
         { // surface 0
                 initial_coord, // initation_point
-                constitutive::TractionFreeInterfaceProperties(),
+                enrichment_properties,
                 growth_criterion,
                 direction_criterion
         } });
