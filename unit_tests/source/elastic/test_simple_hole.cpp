@@ -20,6 +20,8 @@ int main(int argc, char ** argv)
     sparse_linear_algebra::LinAlgFactory::init(
         sparse_linear_algebra::LinAlgFactory::LinAlgBackend::MKL, &argc, &argv);
 
+    utility::MPIUtils::print_process_ids();
+
     // Use a single linear hex
     auto total_mesh = flex_mesh::make_grid<fea_analysis::Mesh>(
             { 0, 1. / 3., 2. / 3., 1.0 },
