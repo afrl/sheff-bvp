@@ -21,6 +21,7 @@
 #include "constitutive/enrichment/direction_criteria/MaxPrincipalStressDirectionCriterion.h"
 
 #include "fea_crack/dof_algorithm/CGXFEMDofAlgorithm.h"
+#include "fea_crack/misc/JsonConversion.h"
 
 #include <memory>
 
@@ -337,6 +338,84 @@ namespace fea_analysis
 
         dof_map_->end_renumber_phase();
     }
+
+	void FractureAnalysis::try_to_grow_precracks()
+	{
+		dof_map_->start_enrichment_phase();
+
+		// Grow all the cracks one element until they can no longer grow
+		int growth_step = 1;
+		for (auto& crack : *enrichment_surfaces_)
+		{
+			auto& crack_state = crack.get_representation().get_state();
+			auto& enrichments_at_front = crack.get_enrichments_at_front();
+			while (!enrichments_at_front.empty())
+			{
+				std::vector<fea_crack::EnrichmentAtFront*> enrichments_at_front_to_grow;
+				for (auto& enrichment_at_front : enrichments_at_front)
+				{
+					auto& element = enrichment_at_front->get_enrichment_ref().get_element();
+					auto& criterion = element.get_propagation_criterion();
+					if (criterion.eval(crack_state.get_enrichment_surface_id(),
+						element.get_mean_coordinate(), simple_math::Vector3D::Zero()))
+					{
+						enrichments_at_front_to_grow.push_back(enrichment_at_front.get());
+					}
+				}
+
+				// If no enrichments can grow due to the propagation criteria, then stop
+				if (enrichments_at_front_to_grow.empty())
+				{
+					break;
+				}
+
+				for (auto& enrichment_at_front_to_grow : enrichments_at_front_to_grow)
+				{
+					auto search_result = crack.search_ahead_of_front(
+						*enrichment_at_front_to_grow);
+
+					crack.grow_crack_front_into_all_leaves(
+						*enrichment_at_front_to_grow,
+						search_result);
+				}
+				crack.write_vtk("./", 1, growth_step);
+				growth_step++;
+			}
+		}
+
+		for (auto& crack : *enrichment_surfaces_)
+		{
+			crack.write_vtk("./", 1, 0);
+		}
+
+		// Change phase to static phase
+		dof_map_->start_renumber_phase();
+
+		auto& renumbering_new_rank_to_old_rank_map =
+			dof_map_->get_renumbering_new_rank_to_old_rank_map();
+		auto& renumbering_old_rank_to_global_map =
+			dof_map_->get_renumbering_old_rank_to_global_map();
+
+		gl_stiffness_->renumber_dofs(0,
+			renumbering_old_rank_to_global_map,
+			renumbering_new_rank_to_old_rank_map);
+		gl_displacement_->renumber_dofs(0,
+			renumbering_old_rank_to_global_map,
+			renumbering_new_rank_to_old_rank_map);
+		gl_rhs_->renumber_dofs(0,
+			renumbering_old_rank_to_global_map,
+			renumbering_new_rank_to_old_rank_map);
+		gl_eigenstrain_force_->renumber_dofs(0,
+			renumbering_old_rank_to_global_map,
+			renumbering_new_rank_to_old_rank_map);
+
+		dof_map_->end_renumber_phase();
+
+        fea_crack::write_json_enrichment_info(
+            "./enrichments.json",
+            mesh_->elements(),
+            *dof_map_);
+	}
 
     void FractureAnalysis::solve_time_step()
     {
