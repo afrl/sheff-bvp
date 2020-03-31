@@ -4,7 +4,10 @@
 #include "flex_mesh/algorithms/Creation.h"
 #include "flex_mesh/algorithms/IO.h"
 #include "flex_mesh/algorithms/UnitElements.h"
-#include "constitutive/elasticity/LinearElasticityConstitutiveRelation.h"
+#include "constitutive/field/deformation/linear_elasticity/LinearElasticProperties.h"
+#include "constitutive/enrichment/properties/TractionFreeInterfaceProperties.h"
+#include "constitutive/enrichment/direction_criteria/PositionFunctionDirectionCriterion.h"
+#include "constitutive/enrichment/growth_criteria/PositionFunctionGrowthCriterion.h"
 #include "fea_io/common/MPIUtils.h"
 #include "sparse_linear_algebra/LinAlgFactory.h"
 
@@ -22,14 +25,12 @@ int main(int argc, char ** argv)
 	*mesh_ptr = flex_mesh::make_grid<Mesh>({ 0, 1, 2, 3 }, { 0, 1, 2 }, { 0, 1, 2, 3 }, false);
     flex_mesh::write_vtk(*mesh_ptr, (get_output_directory(__FILE__) / "mesh.vtk").string());
 
-	// Create a constitutive relation
+    // Create a constitutive relation
     const double E = 1e9;
     const double nu = 0.3;
-    auto properties = std::make_unique<constitutive::LinearElasticProperties>();
-    properties->set_isotropic_E_nu(E, nu);
-    properties->set_thermal_expansion_isotropic(1e-4);
-	auto constitutive_relation_ptr = std::make_unique<constitutive::LinearElasticityConstitutiveRelation>();
-	constitutive_relation_ptr->set_elastic_properties(std::move(properties));
+    constitutive::LinearElasticProperties properties;
+    properties.set_isotropic_E_nu(E, nu);
+    properties.set_thermal_expansion_isotropic(1e-4);
 
     FractureAnalysis analysis;
     auto weak_mesh_ptr = mesh_ptr.get();
@@ -37,17 +38,16 @@ int main(int argc, char ** argv)
         std::move(mesh_ptr),
         get_test_name(__FILE__),
         (get_output_directory(__FILE__) / "output").string());
-    analysis.add_constitutive_relation(
-        "IsotropicMaterial",
-        std::move(constitutive_relation_ptr));
-    analysis.set_elements_constitutive_relation(
-        fea_analysis::ElementSelection(),
-        "IsotropicMaterial");
+    analysis.set_field_model(
+        finite_element::BasalFieldSelection(),
+        "InfinitesimalStrain",
+        properties);
     for (auto& bc : get_unit_tension_x_z_bcs(*weak_mesh_ptr))
     {
         analysis.add_boundary_condition(std::move(bc));
     }
 
+    int phase = 0;
     constitutive::PositionFunctionDirectionCriterion direction_criterion(
         [](const int& crack_index, const simple_math::Point& p) -> simple_math::Vector3D
     {
@@ -60,44 +60,42 @@ int main(int argc, char ** argv)
             return simple_math::Vector3D(1, 0, 0);
         }
     });
-	constitutive::PositionFunctionPropagationCriterion propagation_criterion(
-		[](const int& crack_index, const simple_math::Point& p) -> bool
+	constitutive::PositionFunctionGrowthCriterion growth_criterion(
+		[&phase](const int& crack_index, const simple_math::Point& p) -> bool
 	{
+        switch (phase)
+        {
+        case 0:
+            return false;
+        case 1:
+            return crack_index == 0;
+        case 2:
+            return crack_index == 1;
+        }
 		return false;
 	});
-
-    for (auto& e_ptr : weak_mesh_ptr->elements())
-    {
-        e_ptr->set_direction_criterion(direction_criterion);
-		e_ptr->set_propagation_criterion(propagation_criterion);
-    }
+    constitutive::TractionFreeInterfaceProperties enrichment_properties;
 
     analysis.setup_analysis();
-    analysis.insert_precracks({ 
-		{ 1.5, 0.2, 1.5 },
-		{ 1.5, 1.8, 1.5 }
-	});
+    analysis.insert_precracks({
+        {
+            { 1.5, 0.2, 1.5 }, // point
+            enrichment_properties,
+            growth_criterion,
+            direction_criterion
+        },
+        {
+            { 1.5, 1.8, 1.5 }, // point
+            enrichment_properties,
+            growth_criterion,
+            direction_criterion
+        }
+        });
 
     // Let the cracks grow past each other
-    constitutive::PositionFunctionPropagationCriterion propagation_criterion2(
-        [](const int& crack_index, const simple_math::Point& p) -> bool
-    {
-        return crack_index == 0;
-    });
-    for (auto& e_ptr : weak_mesh_ptr->elements())
-    {
-        e_ptr->set_propagation_criterion(propagation_criterion2);
-    }
+    phase = 1;
     analysis.try_to_grow_precracks();
-    constitutive::PositionFunctionPropagationCriterion propagation_criterion3(
-        [](const int& crack_index, const simple_math::Point& p) -> bool
-    {
-        return crack_index == 1;
-    });
-    for (auto& e_ptr : weak_mesh_ptr->elements())
-    {
-        e_ptr->set_propagation_criterion(propagation_criterion3);
-    }
+    phase = 2;
     analysis.try_to_grow_precracks();
 
     analysis.solve_time_steps();
