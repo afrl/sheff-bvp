@@ -134,7 +134,14 @@ namespace fea_analysis
         output_dir_ = output_dir;
 
         std::string mesh_file_path = (output_dir / "input_mesh").string();
-        flex_mesh::FEAIOInterface<Mesh>::write(*mesh_, mesh_file_path);
+        if (utility::MPIUtils::is_distributed())
+        {
+            std::cout << "TODO: write mesh" << std::endl;
+        }
+        else
+        {
+            flex_mesh::FEAIOInterface<Mesh>::write(*mesh_, mesh_file_path);
+        }
 
         output_meta_.open((output_dir_ / "output").string());
         auto& output_analysis_meta = output_meta_.get_analysis_meta();
