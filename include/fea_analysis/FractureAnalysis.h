@@ -56,7 +56,7 @@ namespace fea_analysis
         /// function defines a plane through the sphere, a crack will be inserted along the plane
         /// both inside and outside the sphere.
         void insert_precracks_by_function(
-            const std::vector<SurfaceInsertionByLevelSet>& insertions);
+            std::vector<SurfaceInsertionByLevelSet>& insertions);
         /// Insert precracks along implicit functions that define the surface (where the functions
         /// equals 0).  This method differs from insert_precracks_by_function in that it only
         /// inserts a surface where the sign of previously inserted surfaces (in the vector) are

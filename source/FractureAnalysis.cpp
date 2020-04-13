@@ -148,14 +148,11 @@ namespace fea_analysis
     }
 
     void FractureAnalysis::insert_precracks_by_function(
-        const std::vector<SurfaceInsertionByLevelSet>& insertions)
+        std::vector<SurfaceInsertionByLevelSet>& insertions)
     {
         auto& factory = finite_element::Factory::get();
         for (auto& insertion : insertions)
         {
-            _UTIL_ASSERT_C(insertion.properties_for_fields_on_neg_side == nullptr,
-                "Right now, changing the field models based on the signed distance is not supported");
-
             auto surface_model = factory.get_enrichment_surface_model(
                 "InfinitesimalStrain",
                 insertion.properties,
@@ -168,7 +165,9 @@ namespace fea_analysis
 
             new_surface.insert_based_on_level_set(
                 insertion.level_set_function,
-                [](const simple_math::Point&) { return true; });
+                [](const simple_math::Point&) { return true; },
+                true,
+                insertion.properties_for_fields_on_neg_side);
 
             enrichment_surfaces_->write_enrichments_vtk_file(
                 "./",
@@ -185,9 +184,6 @@ namespace fea_analysis
         for (auto i : utility::indices(insertions))
         {
             auto& insertion = insertions[i];
-
-            _UTIL_ASSERT_C(insertion.properties_for_fields_on_neg_side == nullptr,
-                "Right now, changing the field models based on the signed distance is not supported");
 
             auto surface_model = factory.get_enrichment_surface_model(
                 "InfinitesimalStrain",
@@ -212,7 +208,8 @@ namespace fea_analysis
                     }
                     return true;
                 },
-                false);
+                false,
+                insertion.properties_for_fields_on_neg_side);
 
             enrichment_surfaces_->write_enrichments_vtk_file(
                 "./",
