@@ -48,6 +48,14 @@ int main(int argc, char ** argv)
     {
         analysis.add_boundary_condition(std::move(bc));
     }
+    // Fix w along the z = 1 side
+    NodeSelection z_pos_1_selection;
+    z_pos_1_selection.add_criteria(
+        [](const fea_analysis::Node& n) -> bool {
+            return n.z() == 3.0;
+        });
+    analysis.add_boundary_condition(std::unique_ptr<DirichletBC>(
+        new DirichletBC(z_pos_1_selection, { 2 , 0 })));
 
     constitutive::AlwaysGrowGrowthCriterion growth_criterion;
     constitutive::PositionFunctionDirectionCriterion direction_criterion(
@@ -55,11 +63,11 @@ int main(int argc, char ** argv)
     {
         if (crack_index == 0)
         {
-            return simple_math::Vector3D(0, 0, 1);
+            return simple_math::Vector3D(1, 0, 0);
         }
         else if (crack_index == 1)
         {
-            return simple_math::Vector3D(1, 0, 0);
+            return simple_math::Vector3D(0, 0, 1);
         }
         else
         {
@@ -69,15 +77,15 @@ int main(int argc, char ** argv)
     constitutive::TractionFreeInterfaceProperties enrichment_properties;
 
     analysis.setup_analysis();
-    analysis.insert_precracks({
-            { // surface 0
+    analysis.insert_precracks({  
+        { // surface 0
+            { 1.5, 0.2, 1.5 }, // initation_point
+            enrichment_properties,
+            growth_criterion,
+            direction_criterion
+        },
+        { // surface 1
                 { 1.5, 0.2, 2.5 }, // initation_point
-                enrichment_properties,
-                growth_criterion,
-                direction_criterion
-            },
-            { // surface 1
-                { 1.5, 0.2, 1.5 }, // initation_point
                 enrichment_properties,
                 growth_criterion,
                 direction_criterion

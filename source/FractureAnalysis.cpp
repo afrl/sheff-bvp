@@ -80,7 +80,7 @@ namespace fea_analysis
                 throw _UTIL_MSG_EXCEPT("No element was found that contains the point "
                     + simple_math::to_string(initation.initiation_point));
             }
-            
+
             auto& direction_criteria = initation.direction_criterion;
             simple_math::VoigtVector zero_stress = simple_math::VoigtVector::Zero(6);
             auto crack_normal = direction_criteria.eval(
@@ -94,13 +94,15 @@ namespace fea_analysis
                 "./",
                 new_surface.get_global_id(), // step #
                 0);  // substep #
+        }
 
-
+        for (auto& surface : *enrichment_surfaces_)
+        {
             //////////////////////////////////////////////////////////////////////////////////////
             // Grow the new surface until it cannot grow any further
 
-            auto& surface_state = new_surface.get_representation().get_state();
-            auto& enrichments_at_front = new_surface.get_enrichments_at_front();
+            auto& surface_state = surface.get_representation().get_state();
+            auto& enrichments_at_front = surface.get_enrichments_at_front();
             int growth_step = 1;
             while (!enrichments_at_front.empty())
             {
@@ -126,10 +128,10 @@ namespace fea_analysis
 
                 for (auto& enrichment_at_front_to_grow : enrichments_at_front_to_grow)
                 {
-                    auto search_result = new_surface.search_ahead_of_front(
+                    auto search_result = surface.search_ahead_of_front(
                         *enrichment_at_front_to_grow);
 
-                    new_surface.grow_crack_front_into_all_leaves(
+                    surface.grow_crack_front_into_all_leaves(
                         *enrichment_at_front_to_grow,
                         search_result,
                         *e_workspace);
@@ -137,7 +139,7 @@ namespace fea_analysis
                 
                 enrichment_surfaces_->write_enrichments_vtk_file(
                     "./",
-                    new_surface.get_global_id(), // step #
+                    surface.get_global_id(), // step #
                     static_cast<int>(growth_step));  // substep #
 
                 growth_step++;
@@ -445,9 +447,7 @@ namespace fea_analysis
 
                 auto& hhe_layout = dynamic_cast<const finite_element::HierarchicalFieldLayout&>(
                     e_ptr->get_field_layout());
-                auto& integration_domains = hhe_layout.get_integration_domains();
-
-                auto& points = integration_domains.get_points();
+                auto& domains = hhe_layout.get_domains();
 
                 flex_mesh::NodeX3Matrix node_coords;
                 e_ptr->get_node_coordinates(node_coords);
@@ -457,18 +457,17 @@ namespace fea_analysis
                 for (auto leaf_index : utility::range_from_zero(e_ptr->get_n_basal_fields()))
                 {
                     auto leaf_info = tree_traverser.get_leaf(leaf_index);
-                    auto& polyhedron = integration_domains.get_polyhedra()[leaf_info.field_index];
-                    auto point_indices = polyhedron.get_point_indices();
+                    auto& field_domain = domains.get_field_domain(leaf_info.field_index);
+                    auto field_polyhedron = field_domain.get_polyhedron();
 
                     // Add points for polyhedra
                     flex_mesh::Connectivity<Node, Element::ConnSize> nodes_for_points;
                     std::map<Element::ConnSize, Element::ConnSize> poly_to_facet_point_index_map;
-                    Element::ConnSize curr_facet_index = 0;
-                    for (auto i : point_indices)
+                    for (auto point_index : utility::range_from_zero(field_polyhedron.points.size()))
                     {
                         // The points of the integration domain is in the parametric coordinate
                         // system, so they need to be transformed to the global for plotting.
-                        auto p = integration_domains.get_points()[i];
+                        auto& p = field_polyhedron.points[point_index];
                         auto shape_function_values =
                             e_ptr->get_shape_function_values(p);
 
@@ -481,20 +480,17 @@ namespace fea_analysis
                         nodes_for_points.push_back(
                             enriched_elements_mesh.add_node_by_coord(global_p));
                         nodes_for_points.back()->set_local_number(curr_local_node_i++);
-                        poly_to_facet_point_index_map[i] = curr_facet_index;
-                        curr_facet_index++;
                     }
 
                     std::vector<utility::DynamicArray<Element::ConnSize, Element::ConnSize>> indices_for_facets;
-                    for (auto& facet : polyhedron.get_facets())
+                    for (auto facet_index : utility::indices(field_polyhedron.point_indices_by_facet))
                     {
+                        auto& facet_point_indices = field_polyhedron.point_indices_by_facet[facet_index];
                         indices_for_facets.emplace_back();
-                        indices_for_facets.back().resize(facet.point_indices.size());
-                        auto curr_facet_i = 0;
-                        for (auto i : facet.point_indices)
+                        indices_for_facets.back().resize(facet_point_indices.size());
+                        for (auto i : utility::range_from_zero(facet_point_indices.size()))
                         {
-                            indices_for_facets.back()[curr_facet_i] = poly_to_facet_point_index_map[i];
-                            curr_facet_i++;
+                            indices_for_facets.back()[i] = facet_point_indices[i];
                         }
                     }
 
@@ -508,15 +504,14 @@ namespace fea_analysis
 
                 // Add nodes and elements for each enrichment
                 // Fills enrichment_surfaces_mesh
-                auto& enrichment_facets = integration_domains.get_enrichment_facets();
                 for (auto enrichment_index : utility::range_from_zero(e_ptr->get_n_enrichments()))
                 {
-                    auto patches = integration_domains.get_enrichment_patches(enrichment_index);
+                    auto patches = domains.get_enrichment_domain(enrichment_index).get_patches();
                     for (auto& patch : patches)
                     {
                         std::vector<Node*> connectivity;
                         auto& points = patch.points;
-                        for (auto i : utility::indices(points))
+                        for (auto i : utility::range_from_zero(points.size()))
                         {
                             // The points of the integration domain is in the parametric coordinate
                             // system, so they need to be transformed to the global for plotting.
@@ -761,7 +756,6 @@ namespace fea_analysis
 
                             auto& hhe_layout = dynamic_cast<const finite_element::HierarchicalFieldLayout&>(
                                 e_ptr->get_field_layout());
-                            auto& integration_domains = hhe_layout.get_integration_domains();
 
                             auto patch_results = e_ptr->calculate(
                                 surface_calc_flags,
@@ -834,7 +828,7 @@ namespace fea_analysis
         // Solve //
         ///////////
 
-		std::cout << dof_map_->str() << std::endl;
+		//std::cout << dof_map_->str() << std::endl;
 
         // TODO make the solver automatically update the ghost values of the solution
         sparse_solver_->solve(

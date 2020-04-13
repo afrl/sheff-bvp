@@ -25,7 +25,7 @@ int main(int argc, char ** argv)
     // Creates grid
     auto mesh_ptr = std::make_unique<Mesh>();
     *mesh_ptr = flex_mesh::make_grid<Mesh>(
-        { 0, 1, 2, 3 }, { 0, 1 }, { 0, 1 }, false);
+        { 0, 1, 2, 3 }, { 0, 1 }, { 0, 1, 2, 3 }, false);
     flex_mesh::write_vtk(*mesh_ptr, (get_output_directory(__FILE__) / "mesh.vtk").string());
 
 	// Create a constitutive relation
@@ -45,7 +45,7 @@ int main(int argc, char ** argv)
         finite_element::BasalFieldSelection(),
         "InfinitesimalStrain",
         properties);
-    for (auto& bc : get_unit_tension_x_bcs(*weak_mesh_ptr))
+    for (auto& bc : get_unit_tension_x_z_bcs(*weak_mesh_ptr))
     {
         analysis.add_boundary_condition(std::move(bc));
     }
