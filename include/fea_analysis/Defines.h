@@ -12,4 +12,11 @@ namespace fea_analysis
 	using Mesh = flex_mesh::MeshPartition<Node, Element>;
 	using ElementSelection = flex_mesh::ElementSelection<Mesh, Element>;
 	using NodeSelection = flex_mesh::NodeSelection<Mesh, Node>;
+
+	/// Must be called ONLY once and BEFORE an analysis is reaches the setup phase.
+	/// \param preferred_lin_alg_backend - a string referring to the type of backend
+	///        to use for linear algebra. (Ex: MKL, PETSC, PARLAB)
+	/// \param argc - count of commandline arguments to pass on to other modules.
+	/// \param argc - commandline arguments to pass on to other modules.
+	void init(const std::string preferred_lin_alg_backend, int* argc, char*** argv);
 }

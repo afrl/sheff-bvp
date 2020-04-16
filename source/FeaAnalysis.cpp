@@ -22,7 +22,7 @@ namespace fea_analysis
                 old_path_ext += ext;
                 auto new_path_ext = new_path;
                 new_path_ext += ext;
-                fs::copy_file(old_path_ext, new_path_ext);
+                fs::copy_file(old_path_ext, new_path_ext, fs::copy_options::overwrite_existing);
             }
         }
     }
