@@ -87,8 +87,10 @@ namespace fea_analysis
                         "All paths in the input meta file must not point to a directory outside where the meta file is located.");
                     copy_file(group_path, output_dir / group_path.filename(),
                         { ".g.json", ".g.bin" });
-                    output_mesh_object.data_paths.push_back(group_path.filename().string());
+                    output_mesh_object.group_paths.push_back(group_path.filename().string());
                 }
+
+                output_mesh_object.type = mesh_object.type;
 
                 output_lod.mesh_objects.push_back(output_mesh_object);
             }
@@ -107,7 +109,7 @@ namespace fea_analysis
         mesh_ = std::make_unique<Mesh>();
         flex_mesh::FEAIOInterface<Mesh>::read_partition(*mesh_, mesh_filepath, 0, 0);
 
-        output_meta_.open("output");
+        output_meta_.open((output_dir_ / "output").string());
         auto& output_analysis_meta = output_meta_.get_analysis_meta();
         output_analysis_meta = input_analysis_meta;
         output_analysis_meta.input_info = output_input_info;
