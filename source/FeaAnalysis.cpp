@@ -86,7 +86,7 @@ namespace fea_analysis
                     _UTIL_ASSERT_C(group_path.parent_path() == input_meta_dir,
                         "All paths in the input meta file must not point to a directory outside where the meta file is located.");
                     copy_file(group_path, output_dir / group_path.filename(),
-                        { ".d.json", ".d.bin" });
+                        { ".g.json", ".g.bin" });
                     output_mesh_object.data_paths.push_back(group_path.filename().string());
                 }
 
