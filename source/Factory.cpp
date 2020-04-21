@@ -16,7 +16,7 @@ namespace fea_analysis
 		{
 			return std::unique_ptr<FeaAnalysis>(new LinearElasticAnalysis());
 		}
-		else if (utility::istr_is_equal(analysis_type, "fracture") &&
+		else if (utility::istr_is_equal(analysis_type, "static_elasticity_xfem") &&
 				 utility::istr_is_equal(kinematics_type, "infinitesimal_strain"))
 		{
 			return std::unique_ptr<FeaAnalysis>(new FractureAnalysis());
