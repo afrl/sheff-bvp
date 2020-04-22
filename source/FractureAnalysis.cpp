@@ -454,7 +454,7 @@ namespace fea_analysis
                 for (auto leaf_index : utility::range_from_zero(e_ptr->get_n_basal_fields()))
                 {
                     auto leaf_info = tree_traverser.get_leaf(leaf_index);
-                    auto& field_domain = domains.get_field_domain(leaf_info.field_index);
+                    auto field_domain = domains.get_field_domain(leaf_info.field_index);
                     auto field_polyhedron = field_domain.get_polyhedron();
 
                     // Add points for polyhedra
