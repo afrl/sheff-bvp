@@ -131,7 +131,7 @@ namespace fea_analysis
                     auto search_result = surface.search_ahead_of_front(
                         *enrichment_at_front_to_grow);
 
-                    surface.grow_crack_front_into_all_leaves(
+                    surface.grow_front_into_all_leaves(
                         *enrichment_at_front_to_grow,
                         search_result,
                         *e_workspace);
@@ -373,7 +373,7 @@ namespace fea_analysis
 					auto search_result = surface.search_ahead_of_front(
 						*enrichment_at_front_to_grow);
 
-                    surface.grow_crack_front_into_all_leaves(
+                    surface.grow_front_into_all_leaves(
 						*enrichment_at_front_to_grow,
 						search_result,
                         *e_workspace);
