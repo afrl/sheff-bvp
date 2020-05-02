@@ -107,7 +107,7 @@ namespace fea_analysis
         std::string mesh_filepath = (input_meta_dir /
             input_analysis_meta.input_info.levels_of_detail[0].mesh_objects[0].mesh_path).string();
         mesh_ = std::make_unique<Mesh>();
-        flex_mesh::FEAIOInterface<Mesh>::read_partition(*mesh_, mesh_filepath, 0, 0);
+        flex_mesh::FEAIOInterface<Mesh>::read_partition(*mesh_, mesh_filepath, utility::MPIUtils::get_local_rank(), 0);
 
         output_meta_.open((output_dir_ / "output").string());
         auto& output_analysis_meta = output_meta_.get_analysis_meta();
