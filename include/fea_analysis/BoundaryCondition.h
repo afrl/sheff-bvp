@@ -63,6 +63,7 @@ namespace fea_analysis
 		{
 			selection_.run_selection(mesh);
 
+			const auto& rank_to_global_map = dof_map.get_rank_to_global_map();
 			for (auto& n_ptr : selection_.get_selection())
 			{
                 auto node_dof_map = dof_map.get_node_map(n_ptr->get_local_number());
@@ -72,7 +73,8 @@ namespace fea_analysis
                 for (auto i : utility::range_from_zero(n_dofs_to_set))
                 {
                     auto offset = i * n_components_for_field + opts_.field_component;
-                    auto global_dof = node_dof_map[offset];
+					const auto& rank_dof = node_dof_map[offset];
+                    const auto& global_dof = rank_to_global_map[rank_dof];
                     constraint_matrix.add_dirichlet_constraint(global_dof, opts_.value);
                 }
 				

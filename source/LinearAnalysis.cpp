@@ -82,6 +82,16 @@ namespace fea_analysis
             gl_stiffness_,
             gl_rhs_,
             gl_displacement_);
+
+        /*
+        auto solution = gl_displacement_->get_as_eigen_vector();
+        if (utility::MPIUtils::get_local_rank() == 0)
+        {
+            std::ofstream out("solution.txt");
+            out << solution;
+            out.close();
+        }
+        */
     }
 
 
