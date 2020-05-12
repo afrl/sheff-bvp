@@ -7,6 +7,10 @@
 #include "output/Output.h"
 #include "output/OutputFeaAnalysisHelpers.h"
 
+#include "utility/Profile.h"
+
+#include <chrono>
+
 namespace fea_analysis
 {
 	void LinearElasticAnalysis::initialize_linear_algebra()
@@ -24,6 +28,13 @@ namespace fea_analysis
             dof_map_->get_node_n_dofs(),
             dof_map_->get_rank_to_global_map(),
             dof_map_->get_enrichment_new_dof_to_old_rank_map());
+
+        std::vector<sparse_linear_algebra::LocalIndex> parent_partitions;
+        parent_partitions.reserve(mesh_->elements().size());
+        for (auto& e_ptr : mesh_->elements())
+        {
+            parent_partitions.push_back(e_ptr->get_parent_partition());
+        }
 
 		// Right now, penalty is all that works.  Switch this to in-place elimination when that works.
 		gl_constraint_matrix_ = sparse_linear_algebra::LinAlgFactory::create_constraint_matrix(
@@ -49,12 +60,18 @@ namespace fea_analysis
 
     void LinearElasticAnalysis::solve_time_step()
     {
+        _F_BEGIN2("apply BC's");
+
         // TODO indicate if Secant or Tangent with BCUpdateType::Secant
         apply_boundary_conditions();
+
+        _F_END();
 
         //////////////
         // Assembly //
         //////////////
+
+        _F_BEGIN2("assembly");
 
         // Queue assembly of the global stiffness matrix
         assembler_->queue_assembly(
@@ -70,6 +87,8 @@ namespace fea_analysis
         // Execute both assemblies as one element loop
         assembler_->execute(gl_displacement_.get());
 
+        _F_END();
+
         // Total RHS = constraint RHS + applied loads + inelastic RHS (temperature/moisture terms)
         *gl_rhs_ = *gl_rhs_ + *gl_eigenstrain_force_;
 
@@ -77,11 +96,15 @@ namespace fea_analysis
         // Solve //
         ///////////
 
+        _F_BEGIN2("linear algebra solve");
+
         // TODO make the solver automatically update the ghost values of the solution
         sparse_solver_->solve(
             gl_stiffness_,
             gl_rhs_,
             gl_displacement_);
+
+        _F_END();
 
         /*
         auto solution = gl_displacement_->get_as_eigen_vector();
@@ -98,6 +121,8 @@ namespace fea_analysis
 
     void LinearElasticAnalysis::write_output()
     {
+        _F_BEGIN();
+
         auto& output_meta_info = output_meta_.get_analysis_meta();
         auto& time_step_info = output_meta_.get_time_step(
             time_step_manager_->get_time_step(),
@@ -225,5 +250,7 @@ namespace fea_analysis
         }
 
         output_meta_.update_meta_file();
+
+        _F_END();
     }
 } // end namespace fea_analysis

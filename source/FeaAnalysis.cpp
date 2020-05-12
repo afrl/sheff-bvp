@@ -7,6 +7,8 @@
 #include "finite_element/Factory.h"
 #include "constitutive/field/FieldProperties.h"
 
+#include "utility/Profile.h"
+
 namespace fea_analysis
 {
     static void copy_file(
@@ -194,6 +196,8 @@ namespace fea_analysis
 
     void fea_analysis::FeaAnalysis::setup_analysis()
     {
+        _F_BEGIN();
+
         // If no time step manager has been set through the input script, it is assumed that
         // this is a static analysis.
         if (time_step_manager_ == 0)
@@ -201,19 +205,40 @@ namespace fea_analysis
 
         assembler_ = std::make_unique<assembler::SerialAssembler>(*mesh_);
 
+        _F_BEGIN2("DoF map setup");
+
         // Setup the dof map and any global matrices/vectors.  The dof map will be
         // used to setup the containers.
         dof_map_ = std::make_unique<dof_manager::DofMap>(*mesh_);
+
+        _F_END();
+
+
+        _F_BEGIN2("init linear algebra");
+
         initialize_linear_algebra();
 
+        _F_END();
+
+
+        _F_BEGIN2("assign ISV's");
+
+        simple_math::Quadrature quadrature;
         for (auto& e_ptr : mesh_->elements())
         {
-            e_ptr->allocate_isvs();
+            e_ptr->allocate_isvs(quadrature);
         }
+
+        _F_END();
+
+
+        _F_END();
     }
 
     void FeaAnalysis::solve_time_steps()
     {
+        _F_BEGIN();
+
         pre_solve_tasks();
 
         // Time loop
@@ -229,6 +254,8 @@ namespace fea_analysis
             solve_time_step();
             write_output();
         } while (time_step_manager_->next_time_step());
+
+        _F_END();
     }
 
     void FeaAnalysis::apply_boundary_conditions()
