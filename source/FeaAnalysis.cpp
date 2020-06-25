@@ -2,6 +2,7 @@
 
 #include "assembler/SerialAssembler.h"
 #include "fea_io/meta/MetaReader.h"
+#include "flex_mesh/algorithms/IO.h"
 #include "flex_mesh/algorithms/IOFeaIo.h"
 
 #include "finite_element/Factory.h"
@@ -111,6 +112,9 @@ namespace fea_analysis
         mesh_ = std::make_unique<Mesh>();
         flex_mesh::FEAIOInterface<Mesh>::read_partition(*mesh_, mesh_filepath, utility::MPIUtils::get_local_rank(), 0);
 
+        // For debugging TODO delete
+        flex_mesh::write_vtk(*mesh_, "partition_" + std::to_string(utility::MPIUtils::get_local_rank()) + ".vtk", true, false);
+
         output_meta_.open((output_dir_ / "output").string());
         auto& output_analysis_meta = output_meta_.get_analysis_meta();
         output_analysis_meta = input_analysis_meta;
@@ -140,7 +144,7 @@ namespace fea_analysis
         std::string mesh_file_path = (output_dir / "input_mesh").string();
         if (utility::MPIUtils::is_distributed())
         {
-            std::cout << "TODO: write mesh" << std::endl;
+            flex_mesh::FEAIOInterface<Mesh>::write_parallel(*mesh_, mesh_file_path);
         }
         else
         {
@@ -205,11 +209,18 @@ namespace fea_analysis
 
         assembler_ = std::make_unique<assembler::SerialAssembler>(*mesh_);
 
+        adjacency_list_.initialize(*mesh_);
+        element_scatter_map_ = std::make_unique<dof_manager::ElementScatterMap>(*mesh_, adjacency_list_);
+
         _F_BEGIN2("DoF map setup");
 
         // Setup the dof map and any global matrices/vectors.  The dof map will be
         // used to setup the containers.
-        dof_map_ = std::make_unique<dof_manager::DofMap>(*mesh_);
+        dof_manager_.enumerate(*mesh_, *element_scatter_map_);
+
+        std::ofstream dof_out("dof_map_" + std::to_string(utility::MPIUtils::get_local_rank()) + ".txt");
+        dof_out << dof_manager_.get_dof_maps().str(*mesh_);
+        dof_out.close();
 
         _F_END();
 
@@ -266,7 +277,8 @@ namespace fea_analysis
             // This works for displacement with solid elements, but reconsider what should
             // be done to handle scalar fields, shell elements, combined fields, etc.
             // TODO figure out a robust term strategy for this
-            bc->initialize(*mesh_, *dof_map_,
+            bc->initialize(*mesh_,
+                dof_manager_.get_dof_maps(),
                 utility::GlobalVariables::get_dimensionality(),
                 *gl_constraint_matrix_);
         }

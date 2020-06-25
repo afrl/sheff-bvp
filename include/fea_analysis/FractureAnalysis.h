@@ -75,7 +75,6 @@ namespace fea_analysis
 		void try_to_grow_precracks();
 
     protected:
-        fea_crack::ElementAdjacencyList adjacency_list_;
         std::unique_ptr<fea_crack::EnrichmentSurfaceManager> enrichment_surfaces_;
 
         /// This method should include any tasks that need to be done at the beginning of

@@ -34,7 +34,6 @@ namespace fea_analysis
     void FractureAnalysis::setup_analysis()
     {
         LinearElasticAnalysis::setup_analysis();
-        adjacency_list_.initialize(*mesh_);
 
         // Create the callback for the fea_crack module to get the element solution
         // vector when evaluating the direction criteria.
@@ -48,9 +47,7 @@ namespace fea_analysis
             *mesh_,
             adjacency_list_,
             get_element_solution_cb,
-            fea_crack::CGXFEMDofAlgorithm::get(*dof_map_));
-
-        dof_map_->start_enrichment_phase();
+            fea_crack::CGXFEMDofAlgorithm::get(dof_manager_));
     }
 
     void FractureAnalysis::insert_precracks(
@@ -314,28 +311,32 @@ namespace fea_analysis
 
     void FractureAnalysis::pre_solve_tasks()
     {
-        // Change phase to static phase
-        dof_map_->start_renumber_phase();
+        if (dof_manager_.requires_renumber())
+        {
+            auto renumber_data = dof_manager_.renumber(*element_scatter_map_);
 
-        auto& renumbering_new_rank_to_old_rank_map =
-            dof_map_->get_renumbering_new_rank_to_old_rank_map();
-        auto& renumbering_old_rank_to_global_map =
-            dof_map_->get_renumbering_old_rank_to_global_map();
+            // Rearrange the data for the sparse_linear_algebra interface
+            using RenumberVector = std::vector<std::pair<sparse_linear_algebra::LocalIndex, sparse_linear_algebra::LocalIndex>>;
+            RenumberVector copy_old_local_value_sources;
+            RenumberVector copy_new_ghost_value_sources;
+            for (auto i : utility::indices(renumber_data.owned_renumbering_sources))
+            {
+                auto& v = renumber_data.owned_renumbering_sources[i];
+                if (v.source_type == dof_manager::DofRenumberingSource::COPY_OLD_LOCAL_VALUE)
+                {
+                    copy_old_local_value_sources.push_back({ i, v.source_dof_rank_index });
+                }
+                else
+                {
+                    copy_new_ghost_value_sources.push_back({ i, v.source_dof_rank_index });
+                }
+            }
 
-        gl_stiffness_->renumber_dofs(0,
-            renumbering_old_rank_to_global_map,
-            renumbering_new_rank_to_old_rank_map);
-        gl_displacement_->renumber_dofs(0,
-            renumbering_old_rank_to_global_map,
-            renumbering_new_rank_to_old_rank_map);
-        gl_rhs_->renumber_dofs(0,
-            renumbering_old_rank_to_global_map,
-            renumbering_new_rank_to_old_rank_map);
-        gl_eigenstrain_force_->renumber_dofs(0,
-            renumbering_old_rank_to_global_map,
-            renumbering_new_rank_to_old_rank_map);
-
-        dof_map_->end_renumber_phase();
+            gl_stiffness_->renumber_dofs(copy_old_local_value_sources, copy_new_ghost_value_sources);
+            gl_displacement_->renumber_dofs(copy_old_local_value_sources, copy_new_ghost_value_sources);
+            gl_rhs_->renumber_dofs(copy_old_local_value_sources, copy_new_ghost_value_sources);
+            gl_eigenstrain_force_->renumber_dofs(copy_old_local_value_sources, copy_new_ghost_value_sources);
+        }
     }
 
 	void FractureAnalysis::try_to_grow_precracks()
@@ -391,7 +392,7 @@ namespace fea_analysis
         fea_crack::write_json_enrichment_info(
             "./enrichments.json",
             mesh_->elements(),
-            *dof_map_);
+            dof_manager_.get_dof_maps());
 	}
 
     void FractureAnalysis::solve_time_step()

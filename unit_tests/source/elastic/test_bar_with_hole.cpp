@@ -18,7 +18,7 @@ int main(int argc, char ** argv)
         sparse_linear_algebra::LinAlgFactory::LinAlgBackend::MKL, &argc, &argv);
     init_output_directory(__FILE__);
 
-    // Create a constitutive relation
+    // Create a properties object
     const double E = 1e9;
     const double nu = 0.3;
     constitutive::LinearElasticProperties properties;

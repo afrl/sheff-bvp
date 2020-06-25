@@ -3,7 +3,7 @@
 #include "finite_element/FiniteElement.h"
 #include "finite_element/hhe_primitives/BasalFieldSelection.h"
 #include "assembler/Assembler.h"
-#include "dof_manager/DofMap.h"
+#include "dof_manager/DofManager.h"
 #include "flex_mesh/maps/SubcomponentMaps.h"
 
 #include "output/Output.h"
@@ -94,18 +94,24 @@ namespace fea_analysis
 
     protected:
         std::unique_ptr<TimeStepManager> time_step_manager_;
+
         std::unique_ptr<Mesh> mesh_;
+        fea_crack::ElementAdjacencyList adjacency_list_;
+        std::unique_ptr<dof_manager::ElementScatterMap> element_scatter_map_;
         flex_mesh::SubcomponentMaps subcomponent_maps_;
+
+        dof_manager::DofManager dof_manager_;
         std::unique_ptr<assembler::Assembler> assembler_;
-        std::unique_ptr<dof_manager::DofMap> dof_map_;
+
         std::vector<std::unique_ptr<BoundaryCondition>> boundary_conditions_;
+
         std::vector<std::unique_ptr<constitutive::FieldProperties>> field_properties_;
+
 		/// The global constraint matrix.  Right now, the interface for adding boundary conditions only allows
 		/// for one constraint matrix.  So this property is put here instead of in a derived class.  If the
 		/// interface is generalized to have multiple constraint matrices, then this will need to be moved.
 		/// Note: this is still expected to be setup in initialize_linear_algebra in the derived classes.
 		std::unique_ptr<sparse_linear_algebra::ConstraintMatrix> gl_constraint_matrix_;
-        std::unique_ptr<sparse_linear_algebra::DofMapReferences> dof_refs_;
 
         output::OutputFlagCache output_flag_cache_;
         std::vector<std::unique_ptr<output::OutputFlag<finite_element::VolumeQuantity>>> volume_output_flags_;

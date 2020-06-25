@@ -5,6 +5,9 @@
 #include "flex_mesh/algorithms/IO.h"
 #include "flex_mesh/algorithms/UnitElements.h"
 #include "constitutive/field/deformation/linear_elasticity/LinearElasticProperties.h"
+#include "constitutive/enrichment/properties/TractionFreeInterfaceProperties.h"
+#include "constitutive/enrichment/direction_criteria/PositionFunctionDirectionCriterion.h"
+#include "constitutive/enrichment/growth_criteria/PositionFunctionGrowthCriterion.h"
 #include "fea_io/common/MPIUtils.h"
 #include "sparse_linear_algebra/LinAlgFactory.h"
 
@@ -52,21 +55,28 @@ int main(int argc, char ** argv)
         analysis.add_boundary_condition(std::move(bc));
     }
 
-    /* TODO update this code
     constitutive::PositionFunctionDirectionCriterion direction_criterion(
         [](const int& crack_index, const simple_math::Point& point) -> simple_math::Vector3D
-    {
-        return simple_math::Vector3D(1, 0, 0);
-    });
-    for (auto& e_ptr : weak_mesh_ptr->elements())
-    {
-        e_ptr->set_direction_criterion(direction_criterion);
-    }
-    */
+        {
+            return simple_math::Vector3D(1, 0, 0);
+        });
+    constitutive::PositionFunctionGrowthCriterion growth_criterion(
+        [](const int& crack_index, const simple_math::Point& p) -> bool
+        {
+            return true;
+        });
+    constitutive::TractionFreeInterfaceProperties enrichment_properties;
 
     analysis.setup_analysis();
     simple_math::Point initial_coord = { 0.525, 0.2, 0.2 };
-    //analysis.insert_precracks({ initial_coord });
+    analysis.insert_precracks({ 
+        {
+            initial_coord,
+            enrichment_properties,
+            growth_criterion,
+            direction_criterion
+        }
+    });
     analysis.solve_time_steps();
 
 	return 0;

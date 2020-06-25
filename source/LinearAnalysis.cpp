@@ -15,19 +15,19 @@ namespace fea_analysis
 {
 	void LinearElasticAnalysis::initialize_linear_algebra()
     {
-        dof_refs_ = std::make_unique<sparse_linear_algebra::DofMapReferences>(
-            dof_map_->get_n_owned_dofs(),
-            dof_map_->get_n_ghost_dofs_from_lower_ranks(),
-            dof_map_->get_n_ghost_dofs_from_higher_ranks(),
-            dof_map_->get_owned_global_dof_begin(),
-            dof_map_->get_owned_global_dof_end(),
-            dof_map_->get_n_owned_elements(),
-            dof_map_->get_element_to_rank_maps(),
-            dof_map_->get_element_n_dofs(),
-            dof_map_->get_node_to_rank_maps(),
-            dof_map_->get_node_n_dofs(),
-            dof_map_->get_rank_to_global_map(),
-            dof_map_->get_enrichment_new_dof_to_old_rank_map());
+        auto& dof_maps = dof_manager_.get_dof_maps();
+        auto& enrichment_data = dof_manager_.get_enrichment_data();
+        sparse_linear_algebra::DofMapRefs dof_refs = {
+            dof_maps.n_owned_dofs,
+            dof_maps.n_local_ghost_dofs,
+            dof_maps.n_exclusive_ghost_dofs,
+            dof_maps.owned_global_dof_begin,
+            dof_maps.owned_global_dof_end,
+            dof_maps.n_owned_elements,
+            dof_maps.element_to_rank_maps,
+            dof_maps.element_n_dofs,
+            dof_maps.rank_to_global_map,
+            enrichment_data.new_dof_to_old_rank_map };
 
         std::vector<sparse_linear_algebra::LocalIndex> parent_partitions;
         parent_partitions.reserve(mesh_->elements().size());
@@ -38,18 +38,18 @@ namespace fea_analysis
 
 		// Right now, penalty is all that works.  Switch this to in-place elimination when that works.
 		gl_constraint_matrix_ = sparse_linear_algebra::LinAlgFactory::create_constraint_matrix(
-            *dof_refs_,
+            dof_refs,
 			sparse_linear_algebra::ConstraintMethod::Penalty);
 
-        gl_stiffness_ = sparse_linear_algebra::LinAlgFactory::create_matrix(*dof_refs_);
+        gl_stiffness_ = sparse_linear_algebra::LinAlgFactory::create_matrix(dof_refs);
 		gl_stiffness_->set_constraint_matrix(gl_constraint_matrix_.get());
         gl_stiffness_->allocate();
 
-        gl_displacement_ = sparse_linear_algebra::LinAlgFactory::create_vector(*dof_refs_);
+        gl_displacement_ = sparse_linear_algebra::LinAlgFactory::create_vector(dof_refs);
         gl_displacement_->allocate();
-        gl_eigenstrain_force_ = sparse_linear_algebra::LinAlgFactory::create_vector(*dof_refs_);
+        gl_eigenstrain_force_ = sparse_linear_algebra::LinAlgFactory::create_vector(dof_refs);
         gl_eigenstrain_force_->allocate();
-        gl_rhs_ = sparse_linear_algebra::LinAlgFactory::create_vector(*dof_refs_);
+        gl_rhs_ = sparse_linear_algebra::LinAlgFactory::create_vector(dof_refs);
         gl_rhs_->allocate();
 
         sparse_linear_algebra::SparseSolverOptions opts;

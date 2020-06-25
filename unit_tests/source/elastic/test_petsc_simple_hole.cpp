@@ -6,6 +6,8 @@
 
 #include "fea_io/common/MPIUtils.h"
 
+#include "flex_mesh/algorithms/IO.h"
+#include "flex_mesh/algorithms/IOFeaIo.h"
 #include "flex_mesh/algorithms/Creation.h"
 #include "flex_mesh/algorithms/Partitioning.h"
 
@@ -18,11 +20,14 @@ using namespace fea_analysis;
 
 int main(int argc, char ** argv)
 {
+    std::this_thread::sleep_for(std::chrono::seconds(10));
+
     fea_io::MPIUtils::init(&argc, &argv);
     utility::MPIUtils::init(&argc, &argv);
     sparse_linear_algebra::LinAlgFactory::init(
         sparse_linear_algebra::LinAlgFactory::LinAlgBackend::PETSC, &argc, &argv);
 
+    auto n_ranks = utility::MPIUtils::get_num_local_ranks();
     utility::MPIUtils::print_process_ids();
     std::this_thread::sleep_for(std::chrono::seconds(20));
 
@@ -37,9 +42,14 @@ int main(int argc, char ** argv)
     total_mesh.update_global_numbering();
 
     flex_mesh::partition_metis(total_mesh, utility::MPIUtils::get_num_local_ranks());
+    if (utility::MPIUtils::is_root())
+    {
+        flex_mesh::FEAIOInterface<fea_analysis::Mesh>::write(total_mesh, "partitioned_mesh");
+    }
 
     auto mesh_ptr = std::make_unique<fea_analysis::Mesh>(
         flex_mesh::extract_partition_mesh(total_mesh, utility::MPIUtils::get_local_rank()));
+    flex_mesh::write_vtk(*mesh_ptr, "mesh_part_" + std::to_string(utility::MPIUtils::get_local_rank()) + ".vtk");
     auto weak_mesh_ptr = mesh_ptr.get();
 
     // Create a constitutive relation
