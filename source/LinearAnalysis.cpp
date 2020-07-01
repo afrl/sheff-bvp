@@ -156,13 +156,28 @@ namespace fea_analysis
             // DEBUG TODO delete
             volume_output_flags_.push_back(
                 std::make_unique<output::OutputFlag<finite_element::VolumeQuantity>>(
+                    "Position", "Global", "Node", output_flag_cache_));
+            volume_output_flags_.push_back(
+                std::make_unique<output::OutputFlag<finite_element::VolumeQuantity>>(
                     "Displacement", "Global", "Node", output_flag_cache_));
+            volume_output_flags_.push_back(
+                std::make_unique<output::OutputFlag<finite_element::VolumeQuantity>>(
+                    "Stress", "Local", "Node", output_flag_cache_));
+            volume_output_flags_.push_back(
+                std::make_unique<output::OutputFlag<finite_element::VolumeQuantity>>(
+                    "Strain", "Global", "Node", output_flag_cache_));
             volume_output_flags_.push_back(
                 std::make_unique<output::OutputFlag<finite_element::VolumeQuantity>>(
                     "Stress", "Global", "Element", output_flag_cache_));
             volume_output_flags_.push_back(
                 std::make_unique<output::OutputFlag<finite_element::VolumeQuantity>>(
                     "Strain", "Global", "Element", output_flag_cache_));
+            volume_output_flags_.push_back(
+                std::make_unique<output::OutputFlag<finite_element::VolumeQuantity>>(
+                    "Position", "Global", "QuadraturePoint", output_flag_cache_));
+            volume_output_flags_.push_back(
+                std::make_unique<output::OutputFlag<finite_element::VolumeQuantity>>(
+                    "Stress", "Global", "QuadraturePoint", output_flag_cache_));
 
             std::vector<output::OutputFlag<finite_element::VolumeQuantity>*> flags_to_be_output;
             for (auto& flag : volume_output_flags_)
