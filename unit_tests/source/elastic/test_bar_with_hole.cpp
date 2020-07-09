@@ -15,17 +15,14 @@ int main(int argc, char ** argv)
     fea_io::MPIUtils::init(&argc, &argv);
     utility::MPIUtils::init(&argc, &argv);
     sparse_linear_algebra::LinAlgFactory::init(
-        sparse_linear_algebra::LinAlgFactory::LinAlgBackend::MKL, &argc, &argv);
+        sparse_linear_algebra::LinAlgFactory::LinAlgBackend::AUTO, &argc, &argv);
     init_output_directory(__FILE__);
 
     // Create a properties object
     const double E = 1e9;
     const double nu = 0.3;
     constitutive::LinearElasticProperties properties;
-    properties.set_orthotropic(
-        221400000000, 12600000000, 12600000000, // E11, E22, E33
-        0.34, 0.34, 0.32, // nu12, nu13, nu23
-        7400000000, 7400000000, 4772700000); // G12, G13, G23
+    properties.set_isotropic_E_nu(1e9, 0.3);
     properties.set_thermal_expansion_isotropic(1e-4);
 
     // Create the boundary conditions

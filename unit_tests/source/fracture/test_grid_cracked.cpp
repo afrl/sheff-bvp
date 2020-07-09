@@ -18,7 +18,7 @@ int main(int argc, char ** argv)
     fea_io::MPIUtils::init(&argc, &argv);
     utility::MPIUtils::init(&argc, &argv);
     sparse_linear_algebra::LinAlgFactory::init(
-        sparse_linear_algebra::LinAlgFactory::LinAlgBackend::MKL, &argc, &argv);
+        sparse_linear_algebra::LinAlgFactory::LinAlgBackend::AUTO, &argc, &argv);
 
 	auto N = 9;
     std::vector<double> grid_offsets(N);

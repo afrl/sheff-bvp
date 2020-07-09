@@ -13,7 +13,7 @@ int main(int argc, char ** argv)
     fea_io::MPIUtils::init(&argc, &argv);
     utility::MPIUtils::init(&argc, &argv);
     sparse_linear_algebra::LinAlgFactory::init(
-        sparse_linear_algebra::LinAlgFactory::LinAlgBackend::MKL, &argc, &argv);
+        sparse_linear_algebra::LinAlgFactory::LinAlgBackend::AUTO, &argc, &argv);
 
     // Use a single linear hex
     auto mesh_ptr = flex_mesh::get_unit_linear_hex_ptr<fea_analysis::Mesh>();

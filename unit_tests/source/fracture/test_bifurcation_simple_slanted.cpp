@@ -18,7 +18,7 @@ int main(int argc, char ** argv)
     fea_io::MPIUtils::init(&argc, &argv);
     utility::MPIUtils::init(&argc, &argv);
     sparse_linear_algebra::LinAlgFactory::init(
-        sparse_linear_algebra::LinAlgFactory::LinAlgBackend::MKL, &argc, &argv);
+        sparse_linear_algebra::LinAlgFactory::LinAlgBackend::AUTO, &argc, &argv);
 
     // Creates a NxNxN grid from 0 to 10
     auto mesh_ptr = std::make_unique<Mesh>();
