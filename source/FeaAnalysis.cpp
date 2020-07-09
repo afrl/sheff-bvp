@@ -113,7 +113,7 @@ namespace fea_analysis
         flex_mesh::FEAIOInterface<Mesh>::read_partition(*mesh_, mesh_filepath, utility::MPIUtils::get_local_rank(), 0);
 
         // For debugging TODO delete
-        flex_mesh::write_vtk(*mesh_, "partition_" + std::to_string(utility::MPIUtils::get_local_rank()) + ".vtk", true, false);
+        //flex_mesh::write_vtk(*mesh_, "partition_" + std::to_string(utility::MPIUtils::get_local_rank()) + ".vtk", true, false);
 
         output_meta_.open((output_dir_ / "output").string());
         auto& output_analysis_meta = output_meta_.get_analysis_meta();
@@ -218,9 +218,11 @@ namespace fea_analysis
         // used to setup the containers.
         dof_manager_.enumerate(*mesh_, *element_scatter_map_);
 
+        /*
         std::ofstream dof_out("dof_map_" + std::to_string(utility::MPIUtils::get_local_rank()) + ".txt");
         dof_out << dof_manager_.get_dof_maps().str(*mesh_);
         dof_out.close();
+        */
 
         _F_END();
 
