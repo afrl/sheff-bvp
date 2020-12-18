@@ -112,7 +112,7 @@ void BoundaryValueProblem::set_input(const std::string input_script_path,
        input_analysis_meta.input_info.levels_of_detail[0].mesh_objects[0].mesh_path)
         .string();
 
-    auto mesh = mesh::read_fea_io(mesh_filepath, utility::MPIUtils::get_local_rank());
+    auto mesh = mesh::read_fea_io_from_meta(mesh_filepath, utility::MPIUtils::get_local_rank());
     bvp_data.fe_mesh().initialize(std::move(mesh));
 
     // For debugging TODO delete
