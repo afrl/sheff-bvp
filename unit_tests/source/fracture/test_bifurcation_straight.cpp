@@ -34,36 +34,14 @@ int main(int argc, char** argv)
       "crack_0_dir_crit",
       constitutive::PositionFunctionDirectionCriterion(
         [](const int& crack_index, const simple_math::Point& p) -> simple_math::Vector3D {
-            if (p[1] <= 1)
-            {
-                return simple_math::Vector3D(0, 0, 1);
-            }
-            else if (p[0] > 1.5)
-            {
-                return simple_math::Vector3D(0, 0.3, 1);
-            }
-            else
-            {
-                return simple_math::Vector3D(0, -0.3, 1);
-            }
+            return simple_math::Vector3D(0, 0, 1);
         }));
 
     auto crack_1_dir_crit = constitutive::add_direction_criterion(
       "crack_1_dir_crit",
       constitutive::PositionFunctionDirectionCriterion(
         [](const int& crack_index, const simple_math::Point& p) -> simple_math::Vector3D {
-            if (p[1] >= 1)
-            {
-                return simple_math::Vector3D(1, 0, 0);
-            }
-            else if (p[2] < 1.5)
-            {
-                return simple_math::Vector3D(1, 0.3, 0);
-            }
-            else
-            {
-                return simple_math::Vector3D(1, -0.3, 0);
-            }
+            return simple_math::Vector3D(1, 0, 0);
         }));
 
     int phase        = 0;
@@ -83,9 +61,13 @@ int main(int argc, char** argv)
     //////////////////////////////////////////////////////////////////////////////////////////////
     // Define boundary value problem
 
+    // A vector of { 0, 1, ..., 10 }
+    std::vector<double> p(11);
+    std::iota(p.begin(), p.end(), 0);
+
     auto bvp = FractureBVP::get();
     BVPData bvp_data;
-    bvp.set_input(mesh::make_linear_grid({ 0, 1, 2, 3 }, { 0, 1, 2 }, { 0, 1, 2, 3 }),
+    bvp.set_input(mesh::make_linear_grid(p, p, p),
                   get_test_name(__FILE__),
                   (get_output_directory(__FILE__) / "output").string(),
                   bvp_data);

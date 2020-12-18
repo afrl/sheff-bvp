@@ -86,7 +86,7 @@ int main(int argc, char** argv)
 
     auto bvp = FractureBVP::get();
     BVPData bvp_data;
-    bvp.set_input(mesh::make_linear_grid({ 0, 1, 2, 3 }, { 0, 1, 2 }, { 0, 1, 2, 3 }),
+    bvp.set_input(mesh::make_linear_grid({ 0, 1, 2, 3 }, { 0, 1, 2, 3, 4 }, { 0, 1, 2, 3 }),
                   get_test_name(__FILE__),
                   (get_output_directory(__FILE__) / "output").string(),
                   bvp_data);

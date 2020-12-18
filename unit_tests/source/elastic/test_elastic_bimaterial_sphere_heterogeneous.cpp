@@ -35,11 +35,6 @@ int main(int argc, char** argv)
                   (get_output_directory(__FILE__) / "output").string(),
                   bvp_data);
 
-    bvp.set_field_models(finite_element::BasalFieldSelection(),
-                         "InfinitesimalStrain",
-                         "isotropic",
-                         bvp_data);
-
     // Set properties and model for matrix elements
     bvp.set_field_models(
       finite_element::BasalFieldSelection([](const mesh::ElementConstAccessor& element,
