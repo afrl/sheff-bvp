@@ -13,19 +13,17 @@ find_package(FiniteElement CONFIG REQUIRED HINTS
   "${CMAKE_SOURCE_DIR}/../finite_element/install_dir" "${CMAKE_SOURCE_DIR}/../../finite_element/install_dir" "${CMAKE_SOURCE_DIR}/modules/finite_element/install_dir")
 find_package(SparseLinearAlgebra CONFIG REQUIRED HINTS 
   "${CMAKE_SOURCE_DIR}/../sparse_linear_algebra/install_dir" "${CMAKE_SOURCE_DIR}/../../sparse_linear_algebra/install_dir" "${CMAKE_SOURCE_DIR}/modules/sparse_linear_algebra/install_dir")
-find_package(Output CONFIG REQUIRED HINTS 
-  "${CMAKE_SOURCE_DIR}/../output/install_dir" "${CMAKE_SOURCE_DIR}/../../output/install_dir" "${CMAKE_SOURCE_DIR}/modules/output/install_dir")
 find_package(DofManager CONFIG REQUIRED HINTS 
   "${CMAKE_SOURCE_DIR}/../dof_manager/install_dir" "${CMAKE_SOURCE_DIR}/../../dof_manager/install_dir" "${CMAKE_SOURCE_DIR}/modules/dof_manager/install_dir")
 find_package(Assembler CONFIG REQUIRED HINTS 
   "${CMAKE_SOURCE_DIR}/../assembler/install_dir" "${CMAKE_SOURCE_DIR}/../../assembler/install_dir" "${CMAKE_SOURCE_DIR}/modules/assembler/install_dir")
-find_package(FeaCrack CONFIG REQUIRED HINTS 
-  "${CMAKE_SOURCE_DIR}/../fea_crack/install_dir" "${CMAKE_SOURCE_DIR}/../../fea_crack/install_dir" "${CMAKE_SOURCE_DIR}/modules/fea_crack/install_dir")
+find_package(Xfem CONFIG REQUIRED HINTS 
+  "${CMAKE_SOURCE_DIR}/../xfem/install_dir" "${CMAKE_SOURCE_DIR}/../../xfem/install_dir" "${CMAKE_SOURCE_DIR}/modules/xfem/install_dir")
 
 
-if(NOT TARGET FeaAnalysis::FeaAnalysis)
-	get_filename_component(FEAANALYSIS_CMAKE_DIR "${CMAKE_CURRENT_LIST_FILE}" PATH)
-    include("${FEAANALYSIS_CMAKE_DIR}/FeaAnalysisTargets.cmake")
+if(NOT TARGET Bvp::Bvp)
+	get_filename_component(BVP_CMAKE_DIR "${CMAKE_CURRENT_LIST_FILE}" PATH)
+    include("${BVP_CMAKE_DIR}/BvpTargets.cmake")
 endif()
 
 # For targets that use this project they can call this in order to group the
@@ -35,9 +33,9 @@ endif()
 #   will have different paths.  CMake does not provide a clean way to group source files
 #   for interface targets as of CMake 3.12.0 that will propogate downstream.  For now,
 #   each target the links against this interface library requires the source groups to be set.
-function(assign_source_group_FeaAnalysis)
-	set(_source_files "@FEAANALYSIS_HEADER_LIST@")
-	set(_include_match_name "fea_analysis")
+function(assign_source_group_Bvp)
+	set(_source_files "@BVP_HEADER_LIST@")
+	set(_include_match_name "bvp")
     foreach(_source IN ITEMS ${_source_files})
 		# Since CMake does not support look ahead and look behind expressions
 		# We will replace "${_include_match_name}/include" with "dummy"
@@ -52,4 +50,4 @@ function(assign_source_group_FeaAnalysis)
 			source_group("${_source_group_msvc}" FILES "${_source}")
 		endif()
     endforeach()
-endfunction(assign_source_group_FeaAnalysis)
+endfunction(assign_source_group_Bvp)

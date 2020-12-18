@@ -1,4 +1,4 @@
-#include "fea_analysis/FractureAnalysis.h"
+#include "bvp/FractureAnalysis.h"
 
 #include "flex_mesh/algorithms/Creation.h"
 #include "flex_mesh/algorithms/IO.h"
@@ -7,7 +7,7 @@
 #include "constitutive/elasticity/LinearElasticityConstitutiveRelation.h"
 #include "fea_io/common/MPIUtils.h"
 
-using namespace fea_analysis;
+using namespace bvp;
 
 int main(int argc, char ** argv)
 {
@@ -38,28 +38,28 @@ int main(int argc, char ** argv)
 	// Fix u along the x = -1 side
     NodeSelection x_neg_1_selection;
 	x_neg_1_selection.add_criteria(
-        [](const fea_analysis::Node& n) -> bool {
+        [](const bvp::Node& n) -> bool {
         return n.x() == -1.0;
     });
 	auto fix_u_at_x_neg_1 = std::unique_ptr<DirchletBC>(new DirchletBC(x_neg_1_selection, { 0 , 0 }));
     // Fix v along the y = -1 side
     NodeSelection y_neg_1_selection;
     y_neg_1_selection.add_criteria(
-        [](const fea_analysis::Node& n) -> bool {
+        [](const bvp::Node& n) -> bool {
         return n.y() == -1.0;
     });
     auto fix_v_at_y_neg_1 = std::unique_ptr<DirchletBC>(new DirchletBC(y_neg_1_selection, { 1 , 0 }));
     // Fix w along the z = 0 side
     NodeSelection z_neg_selection;
     z_neg_selection.add_criteria(
-        [](const fea_analysis::Node& n) -> bool {
+        [](const bvp::Node& n) -> bool {
         return n.z() == 0.0;
     });
     auto fix_w_at_z_neg = std::unique_ptr<DirchletBC>(new DirchletBC(z_neg_selection, { 2 , 0 }));
 	// Specify u along the x = 1 side
     NodeSelection x_pos_1_selection;
     x_pos_1_selection.add_criteria(
-        [](const fea_analysis::Node& n) -> bool {
+        [](const bvp::Node& n) -> bool {
         return n.x() == 1.0;
     });
 	auto fix_u_at_x_pos_1 = std::unique_ptr<DirchletBC>(new DirchletBC(x_pos_1_selection, { 0 , 1 }));
@@ -68,7 +68,7 @@ int main(int argc, char ** argv)
     auto weak_mesh_ptr = mesh_ptr.get();
 	analysis.set_mesh(std::move(mesh_ptr));
 	analysis.add_constitutive_relation("IsotropicMaterial", std::move(constitutive_relation_ptr));
-	analysis.set_elements_constitutive_relation(fea_analysis::ElementSelection(), "IsotropicMaterial");
+	analysis.set_elements_constitutive_relation(bvp::ElementSelection(), "IsotropicMaterial");
 	analysis.add_boundary_condition(std::move(fix_u_at_x_neg_1));
     analysis.add_boundary_condition(std::move(fix_v_at_y_neg_1));
     analysis.add_boundary_condition(std::move(fix_w_at_z_neg));

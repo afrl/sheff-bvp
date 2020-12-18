@@ -1,9 +1,10 @@
-#include "fea_analysis/Defines.h"
+#include "bvp/Defines.h"
 
 #include "sparse_linear_algebra/LinAlgFactory.h"
 #include "fea_io/common/MPIUtils.h"
+#include "utility/MPIUtils.h"
 
-namespace fea_analysis
+namespace bvp
 {
     void init(const std::string preferred_lin_alg_backend, int* argc, char*** argv)
     {

@@ -1,83 +1,72 @@
 #include "../UnitTestHelpers.h"
-
-#include "fea_analysis/FractureAnalysis.h"
-#include "flex_mesh/algorithms/Creation.h"
-#include "flex_mesh/algorithms/IO.h"
-#include "flex_mesh/algorithms/UnitElements.h"
-#include "constitutive/field/deformation/linear_elasticity/LinearElasticProperties.h"
-#include "constitutive/enrichment/properties/TractionFreeInterfaceProperties.h"
+#include "bvp/bvp/FractureBVP.h"
+#include "constitutive/enrichment/deformation/traction_free/TractionFreeInterfaceProperties.h"
 #include "constitutive/enrichment/direction_criteria/PositionFunctionDirectionCriterion.h"
-#include "constitutive/enrichment/growth_criteria/PositionFunctionGrowthCriterion.h"
-#include "fea_io/common/MPIUtils.h"
-#include "sparse_linear_algebra/LinAlgFactory.h"
+#include "constitutive/enrichment/growth_criteria/AlwaysGrowGrowthCriterion.h"
+#include "constitutive/field/deformation/linear_elasticity/LinearElasticProperties.h"
+#include "mesh/algorithms/Creation.h"
 
-using namespace fea_analysis;
+using namespace bvp;
 
-int main(int argc, char ** argv)
+int main(int argc, char** argv)
 {
     fea_io::MPIUtils::init(&argc, &argv);
     utility::MPIUtils::init(&argc, &argv);
     sparse_linear_algebra::LinAlgFactory::init(
-        sparse_linear_algebra::LinAlgFactory::LinAlgBackend::AUTO, &argc, &argv);
+      sparse_linear_algebra::LinAlgFactory::LinAlgBackend::AUTO,
+      &argc,
+      &argv);
 
-	auto N = 9;
+    //////////////////////////////////////////////////////////////////////////////////////////////
+    // Properties
+
+    constitutive::add_field_properties(
+      "isotropic",
+      constitutive::LinearElasticProperties::create_isotropic_E_nu(1e9, 0.3));
+
+    auto surf_props = constitutive::add_enrichment_properties(
+      "traction_free",
+      constitutive::TractionFreeInterfaceProperties::create());
+
+    auto crack_0_dir_crit = constitutive::add_direction_criterion(
+      "crack_0_dir_crit",
+      constitutive::PositionFunctionDirectionCriterion(
+        [](const int& crack_index, const simple_math::Point& p) -> simple_math::Vector3D {
+            return simple_math::Vector3D(1, 0, 0);
+        }));
+
+    auto growth_crit =
+      constitutive::add_growth_criterion("growth_crit", constitutive::AlwaysGrowGrowthCriterion());
+
+    //////////////////////////////////////////////////////////////////////////////////////////////
+    // Define boundary value problem
+
+    auto N = 9;
     std::vector<double> grid_offsets(N);
     for (auto i : utility::indices(grid_offsets))
     {
         grid_offsets[i] = 2.0 * double(i) / double(grid_offsets.size() - 1) - 1.0;
     }
 
-    // Creates a NxNxN grid from -1 to 1
-    auto mesh_ptr = std::make_unique<Mesh>();
-    *mesh_ptr = flex_mesh::make_grid<Mesh>(
-        grid_offsets, grid_offsets, { 0, 0.2, 0.4 }, false);
-    flex_mesh::write_vtk(*mesh_ptr, (get_output_directory(__FILE__) / "mesh.vtk").string());
+    auto bvp = FractureBVP::get();
+    BVPData bvp_data;
+    bvp.set_input(mesh::make_linear_grid(grid_offsets, grid_offsets, { 0, 0.2, 0.4 }),
+                  get_test_name(__FILE__),
+                  (get_output_directory(__FILE__) / "output").string(),
+                  bvp_data);
+    bvp.set_field_models(finite_element::BasalFieldSelection(),
+                         "InfinitesimalStrain",
+                         "isotropic",
+                         bvp_data);
+    add_unit_tension_x_z_bcs(bvp_data);
 
-	// Create a constitutive relation
-    const double E = 1e9;
-    const double nu = 0.3;
-    constitutive::LinearElasticProperties properties;
-    properties.set_isotropic_E_nu(E, nu);
-    properties.set_thermal_expansion_isotropic(1e-4);
-	
-    FractureAnalysis analysis;
-    auto weak_mesh_ptr = mesh_ptr.get();
-    analysis.set_input(
-        std::move(mesh_ptr),
-        get_test_name(__FILE__),
-        (get_output_directory(__FILE__) / "output").string());
-    analysis.set_field_model(
-        finite_element::BasalFieldSelection(),
-        "InfinitesimalStrain",
-        properties);
-    for (auto& bc : get_unit_tension_x_bcs(*weak_mesh_ptr))
-    {
-        analysis.add_boundary_condition(std::move(bc));
-    }
+    bvp.insert_precracks(bvp_data,
+                         { { { 0.525, 0.2, 0.2 }, // point
+                             surf_props,
+                             growth_crit,
+                             crack_0_dir_crit } });
 
-    constitutive::PositionFunctionDirectionCriterion direction_criterion(
-        [](const int& crack_index, const simple_math::Point& point) -> simple_math::Vector3D
-        {
-            return simple_math::Vector3D(1, 0, 0);
-        });
-    constitutive::PositionFunctionGrowthCriterion growth_criterion(
-        [](const int& crack_index, const simple_math::Point& p) -> bool
-        {
-            return true;
-        });
-    constitutive::TractionFreeInterfaceProperties enrichment_properties;
+    bvp.solve_time_steps(bvp_data);
 
-    analysis.setup_analysis();
-    simple_math::Point initial_coord = { 0.525, 0.2, 0.2 };
-    analysis.insert_precracks({ 
-        {
-            initial_coord,
-            enrichment_properties,
-            growth_criterion,
-            direction_criterion
-        }
-    });
-    analysis.solve_time_steps();
-
-	return 0;
+    return 0;
 }

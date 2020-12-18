@@ -1,97 +1,80 @@
 #include "../UnitTestHelpers.h"
-
-#include "fea_analysis/FractureAnalysis.h"
-#include "flex_mesh/algorithms/Creation.h"
-#include "flex_mesh/algorithms/IO.h"
-#include "flex_mesh/algorithms/UnitElements.h"
-#include "constitutive/field/deformation/linear_elasticity/LinearElasticProperties.h"
-#include "fea_io/common/MPIUtils.h"
-#include "sparse_linear_algebra/LinAlgFactory.h"
-
+#include "bvp/bvp/FractureBVP.h"
+#include "constitutive/enrichment/deformation/traction_free/TractionFreeInterfaceProperties.h"
 #include "constitutive/enrichment/direction_criteria/PositionFunctionDirectionCriterion.h"
 #include "constitutive/enrichment/growth_criteria/AlwaysGrowGrowthCriterion.h"
-#include "constitutive/enrichment/properties/TractionFreeInterfaceProperties.h"
+#include "constitutive/field/deformation/linear_elasticity/LinearElasticProperties.h"
+#include "mesh/algorithms/Creation.h"
 
-using namespace fea_analysis;
+using namespace bvp;
 
-int main(int argc, char ** argv)
+int main(int argc, char** argv)
 {
     fea_io::MPIUtils::init(&argc, &argv);
     utility::MPIUtils::init(&argc, &argv);
     sparse_linear_algebra::LinAlgFactory::init(
-        sparse_linear_algebra::LinAlgFactory::LinAlgBackend::AUTO, &argc, &argv);
+      sparse_linear_algebra::LinAlgFactory::LinAlgBackend::AUTO,
+      &argc,
+      &argv);
 
-    // Creates grid
-    auto mesh_ptr = std::make_unique<Mesh>();
-    *mesh_ptr = flex_mesh::make_grid<Mesh>(
-        { 0, 1, 2, 3 }, { 0, 1 }, { 0, 1, 2, 3 }, false);
-    flex_mesh::write_vtk(*mesh_ptr, (get_output_directory(__FILE__) / "mesh.vtk").string());
+    //////////////////////////////////////////////////////////////////////////////////////////////
+    // Properties
 
-	// Create a constitutive relation
-    const double E = 1e9;
-    const double nu = 0.3;
-    constitutive::LinearElasticProperties properties;
-    properties.set_isotropic_E_nu(E, nu);
-    properties.set_thermal_expansion_isotropic(1e-4);
+    constitutive::add_field_properties(
+      "isotropic",
+      constitutive::LinearElasticProperties::create_isotropic_E_nu(1e9, 0.3));
 
-    FractureAnalysis analysis;
-    auto weak_mesh_ptr = mesh_ptr.get();
-    analysis.set_input(
-        std::move(mesh_ptr),
-        get_test_name(__FILE__),
-        (get_output_directory(__FILE__) / "output").string());
-    analysis.set_field_model(
-        finite_element::BasalFieldSelection(),
-        "InfinitesimalStrain",
-        properties);
-    for (auto& bc : get_unit_tension_x_bcs(*weak_mesh_ptr))
-    {
-        analysis.add_boundary_condition(std::move(bc));
-    }
-    // Fix w along the z = 1 side
-    NodeSelection z_pos_1_selection;
-    z_pos_1_selection.add_criteria(
-        [](const fea_analysis::Node& n) -> bool {
-            return n.z() == 3.0;
-        });
-    analysis.add_boundary_condition(std::unique_ptr<DirichletBC>(
-        new DirichletBC(z_pos_1_selection, { 2 , 0 })));
+    auto surf_props = constitutive::add_enrichment_properties(
+      "traction_free",
+      constitutive::TractionFreeInterfaceProperties::create());
 
-    constitutive::AlwaysGrowGrowthCriterion growth_criterion;
-    constitutive::PositionFunctionDirectionCriterion direction_criterion(
-        [](const int& crack_index, const simple_math::Point& point) -> simple_math::Vector3D
-    {
-        if (crack_index == 0)
-        {
+    auto crack_0_dir_crit = constitutive::add_direction_criterion(
+      "crack_0_dir_crit",
+      constitutive::PositionFunctionDirectionCriterion(
+        [](const int& crack_index, const simple_math::Point& p) -> simple_math::Vector3D {
             return simple_math::Vector3D(1, 0, 0);
-        }
-        else if (crack_index == 1)
-        {
+        }));
+
+    auto crack_1_dir_crit = constitutive::add_direction_criterion(
+      "crack_1_dir_crit",
+      constitutive::PositionFunctionDirectionCriterion(
+        [](const int& crack_index, const simple_math::Point& p) -> simple_math::Vector3D {
             return simple_math::Vector3D(0, 0, 1);
-        }
-        else
-        {
-            throw _UTIL_MSG_EXCEPT("Unknown crack");
-        }
-    });
-    constitutive::TractionFreeInterfaceProperties enrichment_properties;
+        }));
 
-    analysis.setup_analysis();
-    analysis.insert_precracks({  
-        { // surface 0
-            { 1.5, 0.2, 1.5 }, // initation_point
-            enrichment_properties,
-            growth_criterion,
-            direction_criterion
-        },
-        { // surface 1
-                { 1.5, 0.2, 2.5 }, // initation_point
-                enrichment_properties,
-                growth_criterion,
-                direction_criterion
-            }
-        });
-    analysis.solve_time_steps();
+    auto growth_crit = constitutive::add_growth_criterion(
+      "growth_crit",
+      constitutive::AlwaysGrowGrowthCriterion());
 
-	return 0;
+    //////////////////////////////////////////////////////////////////////////////////////////////
+    // Define boundary value problem
+
+    auto bvp = FractureBVP::get();
+    BVPData bvp_data;
+    bvp.set_input(mesh::make_linear_grid({ 0, 1, 2, 3 }, { 0, 1 }, { 0, 1, 2, 3 }),
+                  get_test_name(__FILE__),
+                  (get_output_directory(__FILE__) / "output").string(),
+                  bvp_data);
+    bvp.set_field_models(finite_element::BasalFieldSelection(),
+                         "InfinitesimalStrain",
+                         "isotropic",
+                         bvp_data);
+    add_unit_tension_x_bcs(bvp_data);
+    bvp_data.add_bc(DirichletBC("pos_z", { 2, 0 }));
+
+    bvp.insert_precracks(bvp_data,
+                         { {                    // surface 0
+                             { 1.5, 0.2, 1.5 }, // initation_point
+                             surf_props,
+                             growth_crit,
+                             crack_0_dir_crit },
+                           {                    // surface 1
+                             { 1.5, 0.2, 2.5 }, // initation_point
+                             surf_props,
+                             growth_crit,
+                             crack_1_dir_crit } });
+
+    bvp.solve_time_steps(bvp_data);
+
+    return 0;
 }

@@ -2,7 +2,7 @@
 
 #include <stack>
 
-namespace fea_analysis
+namespace bvp
 {
 
     /// A class to manage the time step loops and iteration loops during an analysis.

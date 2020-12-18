@@ -1,0 +1,175 @@
+#pragma once
+
+#include "assembler/Assembler.h"
+#include "dof_manager/DofManager.h"
+#include "bvp/Defines.h"
+#include "bvp/TimeDiscretization.h"
+#include "bvp/bc/BoundaryCondition.h"
+#include "bvp/bc/Serialization.h"
+#include "xfem/XFEM.h"
+
+namespace bvp
+{
+/// @brief Data that must be saved in a restart file
+struct BVPCoreData
+{
+    fs::path output_dir;
+    TimeDiscretizationData time_discr_data;
+
+    finite_element::FiniteElementMesh fe_mesh;
+    dof_manager::DofManager dof_manager;
+    std::vector<std::unique_ptr<BoundaryCondition>> boundary_conditions;
+    std::unique_ptr<sparse_linear_algebra::Vector> gl_solution;
+    std::vector<xfem::EnrichmentSurfaceData> enrichment_surfaces_data;
+};
+
+/// @brief Data that can be recovered from BVPCoreData or set directly
+struct BVPSecondaryData
+{
+    mesh::ElementAdjacencyList adjacency_list;
+    mesh::NodeToElementMap node_to_element_map;
+    dof_manager::ElementScatterMap element_scatter_map;
+    std::unique_ptr<assembler::Assembler> assembler_ptr;
+};
+
+/// @brief Base class of struct that holds linear algebra objects (besides the solution vector),
+/// allowing each type of BVP to define its own list of linear algebra structures.
+struct BVPLinearAlgebra
+{
+};
+
+/// @brief Data structure that holds all of the data relevant to a boundary value problem.
+///
+/// For boundary value problems (BVP), the data (which this structure contains) is separated from
+/// the algorithms.  All calls to a BoundaryValueProblem class require a BVPData instance, which
+/// will be modified to solve the related boundary value problem.
+struct BVPData
+{
+    BVPCoreData core_data;
+    BVPSecondaryData secondary_data;
+    std::unique_ptr<BVPLinearAlgebra> gl_lin_alg;
+
+    //////////////////////////////////////////////////////////////////////////////////////////////
+    // Short-hand accessors to ease navigating the structs
+
+    inline auto& output_dir()
+    {
+        return core_data.output_dir;
+    }
+
+    inline auto& mesh()
+    {
+        return core_data.fe_mesh.mesh;
+    }
+
+    inline auto& mesh() const
+    {
+        return core_data.fe_mesh.mesh;
+    }
+
+    inline auto& fe_mesh()
+    {
+        return core_data.fe_mesh;
+    }
+
+    inline auto& fe_mesh() const
+    {
+        return core_data.fe_mesh;
+    }
+
+    inline auto& dof_manager()
+    {
+        return core_data.dof_manager;
+    }
+
+    inline auto& bcs()
+    {
+        return core_data.boundary_conditions;
+    }
+
+    inline auto& solution()
+    {
+        _UTIL_ASSERT_C(core_data.gl_solution,
+                       "Linear algebra must be intiailized before the solution can be accessed.");
+        return *core_data.gl_solution;
+    }
+
+    inline auto& solution() const
+    {
+        _UTIL_ASSERT_C(core_data.gl_solution,
+                       "Linear algebra must be intiailized before the solution can be accessed.");
+        return *core_data.gl_solution;
+    }
+
+    inline auto& enrichment_surfaces_data()
+    {
+        return core_data.enrichment_surfaces_data;
+    }
+
+    inline auto& adjacency_list()
+    {
+        return secondary_data.adjacency_list;
+    }
+
+    inline auto& node_to_element_map()
+    {
+        return secondary_data.node_to_element_map;
+    }
+
+    inline auto& element_scatter_map()
+    {
+        return secondary_data.element_scatter_map;
+    }
+
+    inline auto& assembler()
+    {
+        _UTIL_ASSERT_C(secondary_data.assembler_ptr,
+                       "The assembler must be initialized first, BoundaryValueProblem is "
+                       "probably missing a call to init_data internally.");
+        return *secondary_data.assembler_ptr;
+    }
+
+    inline void add_bc(std::unique_ptr<BoundaryCondition>& bc)
+    {
+        core_data.boundary_conditions.push_back(std::move(bc));
+    }
+
+    template<typename DerivedBC>
+    inline void add_bc(DerivedBC&& bc)
+    {
+        core_data.boundary_conditions.push_back(std::make_unique<DerivedBC>(std::move(bc)));
+    }
+};
+
+/// @brief Load a binary serialization of a BVPData object in the given file.
+/// @param filename - name of the file to load (extension will be ignored if given)
+///
+/// Note: if the BVPData was saved while distributed, then it is required that the current number of
+/// ranks match how many were running when it was saved.  In this case, this loads the data
+/// corresponding to the current rank ID.
+BVPData load_bvp_data(const std::string filestem);
+
+/// @brief Load a binary serialization of a BVPData object in the given file.
+/// @param filename - name of the file to load (extension will be ignored if given)
+/// @param rank_to_load - the corresponding rank for which to load the saved BVPData
+///
+/// Note: As opposed to the other load_bvp_data calls, this does not require the current number of
+/// ranks to match the number that saved the data and the current rank does not have to match the
+/// rank for which data will be loaded.
+BVPData load_bvp_data(const std::string filestem, int rank_to_load);
+
+/// @brief Write a binary serialization of the given bvp_data to a file with the given name and a
+/// corresponding JSON file containing the offsets of each rank.
+/// @param bvp_data - the BVPData to save
+/// @param filestem - name of the file without an extension (can be a path relative to the CWD)
+///
+/// Note: writes the binary file to "<filestem>.bvp.bin" and the JSON data to "<filestem>.bvp.json"
+void save_bvp_data(const BVPData& bvp_data, const std::string filestem);
+
+/// @brief Write a JSON serialization of the given bvp_data to a text file with the given name.
+/// @param filestem - name of the file without an extension (can be a path relative to the CWD)
+///
+/// Note: if distributed, then each rank will write to its own text file "<filestem>_<rank id>.txt",
+/// otherwise this will write to  "<filestem>.txt"
+void save_bvp_data_json(const BVPData& bvp_data, const std::string filestem);
+}

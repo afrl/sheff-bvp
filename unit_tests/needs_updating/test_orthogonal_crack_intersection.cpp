@@ -1,4 +1,4 @@
-#include "fea_analysis/FractureAnalysis.h"
+#include "bvp/FractureAnalysis.h"
 
 #include "flex_mesh/algorithms/Creation.h"
 #include "flex_mesh/algorithms/IO.h"
@@ -14,7 +14,7 @@
 
 #include "simple_math/Utility.h"
 
-using namespace fea_analysis;
+using namespace bvp;
 
 int main(int argc, char ** argv)
 {
@@ -43,35 +43,35 @@ int main(int argc, char ** argv)
 	// Fix u along the x = 0 side
     NodeSelection x_0_selection;
     x_0_selection.add_criteria(
-        [](const fea_analysis::Node& n) -> bool {
+        [](const bvp::Node& n) -> bool {
         return n.x() == 0.0;
     });
 	auto fix_u_at_x_0 = std::unique_ptr<DirchletBC>(new DirchletBC(x_0_selection, { 0 , 0 }));
     // Fix u along the x = 1 side
     NodeSelection x_1_selection;
     x_1_selection.add_criteria(
-        [](const fea_analysis::Node& n) -> bool {
+        [](const bvp::Node& n) -> bool {
         return n.x() == 1.0;
     });
     auto fix_u_at_x_1 = std::unique_ptr<DirchletBC>(new DirchletBC(x_1_selection, { 0 , 0 }));
     // Fix v along the y = 0 side
     NodeSelection y_0_selection;
     y_0_selection.add_criteria(
-        [](const fea_analysis::Node& n) -> bool {
+        [](const bvp::Node& n) -> bool {
         return n.y() == 0.0;
     });
     auto fix_v_at_y_0 = std::unique_ptr<DirchletBC>(new DirchletBC(y_0_selection, { 1 , 0 }));
     // Fix w along the z = 0 side
     NodeSelection z_0_selection;
     z_0_selection.add_criteria(
-        [](const fea_analysis::Node& n) -> bool {
+        [](const bvp::Node& n) -> bool {
         return n.z() == 0.0;
     });
     auto fix_w_at_z_0 = std::unique_ptr<DirchletBC>(new DirchletBC(z_0_selection, { 2 , 0 }));
 	// Specify v along the y = 1 side
     NodeSelection y_1_selection;
     y_1_selection.add_criteria(
-        [](const fea_analysis::Node& n) -> bool {
+        [](const bvp::Node& n) -> bool {
         return n.y() == 1.0;
     });
 	auto fix_v_at_y_1 = std::unique_ptr<DirchletBC>(new DirchletBC(y_1_selection, { 1 , 0.1 }));
@@ -80,7 +80,7 @@ int main(int argc, char ** argv)
     auto weak_mesh_ptr = mesh_ptr.get();
 	analysis.set_mesh(std::move(mesh_ptr));
 	analysis.add_constitutive_relation("IsotropicMaterial", std::move(constitutive_relation_ptr));
-	analysis.set_elements_constitutive_relation(fea_analysis::ElementSelection(), "IsotropicMaterial");
+	analysis.set_elements_constitutive_relation(bvp::ElementSelection(), "IsotropicMaterial");
 	analysis.add_boundary_condition(std::move(fix_u_at_x_0));
     analysis.add_boundary_condition(std::move(fix_u_at_x_1));
     analysis.add_boundary_condition(std::move(fix_v_at_y_0));
