@@ -3,6 +3,7 @@
 #include "constitutive/enrichment/deformation/traction_free/TractionFreeInterfaceProperties.h"
 #include "constitutive/field/deformation/linear_elasticity/LinearElasticProperties.h"
 #include "mesh/algorithms/Creation.h"
+#include "mesh/algorithms/IO.h"
 
 using namespace bvp;
 
@@ -34,6 +35,7 @@ int main(int argc, char** argv)
     std::iota(p.begin(), p.end(), 0);
 
     auto grid = mesh::make_linear_grid(p, p, p);
+    mesh::write_vtk(grid, "grid.vtk", false);
 
     mesh::add_to_group(grid,
                        "fixed_sphere_nodes",
@@ -49,7 +51,7 @@ int main(int argc, char** argv)
 
     auto bvp = FractureBVP::get();
     BVPData bvp_data;
-    bvp.set_input(mesh::make_linear_grid(p, p, p),
+    bvp.set_input(std::move(grid),
                   get_test_name(__FILE__),
                   (get_output_directory(__FILE__) / "output").string(),
                   bvp_data);
@@ -61,9 +63,9 @@ int main(int argc, char** argv)
     add_unit_tension_z_bcs(bvp_data);
     // Add an extra boundary condition to move the sphere in the center upwards and prevent rigid
     // body rotation.
-    bvp_data.add_bc(DirichletBC("fixed_sphere_nodes", { 0, 0.0 }));
-    bvp_data.add_bc(DirichletBC("fixed_sphere_nodes", { 1, 0.0 }));
-    bvp_data.add_bc(DirichletBC("fixed_sphere_nodes", { 2, 0.5 }));
+    bvp_data.add_bc(DirichletBC("fixed_sphere_nodes", { 0, 0.0, BCApplicationType::NODE }));
+    bvp_data.add_bc(DirichletBC("fixed_sphere_nodes", { 1, 0.0, BCApplicationType::NODE }));
+    bvp_data.add_bc(DirichletBC("fixed_sphere_nodes", { 2, 0.5, BCApplicationType::NODE }));
 
     // 1) Insert a spherical enrichment surface defined by the radius and center below.
     // 2) Insert a curved enrichment surface defined by the radius and center below that

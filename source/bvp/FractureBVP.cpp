@@ -3,6 +3,7 @@
 #include "constitutive/enrichment/direction_criteria/MaxPrincipalStressDirectionCriterion.h"
 #include "constitutive/enrichment/growth_criteria/AlwaysGrowGrowthCriterion.h"
 #include "finite_element/ModelSelectionHelper.h"
+#include "finite_element/hhe_primitives/PrimitiveAlgorithms.h"
 #include "mesh/algorithms/Search.h"
 #include "xfem/XFEM.h"
 #include "xfem/dof_algorithm/CGXFEMDofAlgorithm.h"
@@ -151,7 +152,9 @@ void FractureBVP::insert_precracks_by_function(
           surface_model.enrichment_model,
           surface_model.pointwise_enrichment_model_data,
           insertion.level_set_function,
-          [](const simple_math::Point&) { return true; },
+          [](const finite_element::FiniteElementConstAccessor& curr_fe,
+             const finite_element::LeafIndex& leaf_index,
+             const simple_math::Point& p) { return true; },
           true,
           insertion.properties_for_fields_on_neg_side));
         xfem::update_surface_ids(xfem_param, enrichment_surfaces_data);
@@ -195,15 +198,28 @@ void FractureBVP::insert_precracks_by_function_outside_previous(
           surface_model.enrichment_model,
           surface_model.pointwise_enrichment_model_data,
           insertion.level_set_function,
-          [&insertions, &i](const simple_math::Point& p) {
-              for (auto j : utility::range(i))
+          [&insertions, &i](const finite_element::FiniteElementConstAccessor& curr_fe,
+                            const finite_element::LeafIndex& leaf_index,
+                            const simple_math::Point& p) -> bool {
+              // If the element is not enriched, then ensure it on the side of all of the level-sets
+              if (curr_fe.layout.get_n_enrichments() == 0)
               {
-                  if (insertions[j].level_set_function(p) <= 0.0)
+                  for (auto j : utility::range(i))
                   {
-                      return false;
+                      if (insertions[j].level_set_function(p) <= 0.0)
+                      {
+                          return false;
+                      }
                   }
+                  return true;
               }
-              return true;
+              else
+              {
+                  return finite_element::does_all_ancestors_match_field_sign(
+                    curr_fe,
+                    leaf_index,
+                    finite_element::FieldSign::Pos);
+              }
           },
           false,
           insertion.properties_for_fields_on_neg_side));
@@ -262,12 +278,14 @@ void FractureBVP::insert_precracks_by_function_with_boolean(
                                                                           max_prin_dir_ref);
 
     // Insert surface for f1 (including boolean)
-    enrichment_surfaces_data.push_back(
-      xfem::insert_surface_based_on_level_set(xfem_param,
-                                              surface_model.enrichment_model,
-                                              surface_model.pointwise_enrichment_model_data,
-                                              f1_wrapped,
-                                              [](const simple_math::Point& p) { return true; }));
+    enrichment_surfaces_data.push_back(xfem::insert_surface_based_on_level_set(
+      xfem_param,
+      surface_model.enrichment_model,
+      surface_model.pointwise_enrichment_model_data,
+      f1_wrapped,
+      [](const finite_element::FiniteElementConstAccessor& curr_fe,
+         const finite_element::LeafIndex& leaf_index,
+         const simple_math::Point& p) { return true; }));
     xfem::update_surface_ids(xfem_param, enrichment_surfaces_data);
 
     xfem::write_level_sets_to_vtk(enrichment_surfaces_data,
@@ -296,7 +314,9 @@ void FractureBVP::insert_precracks_by_function_with_boolean(
           surface_model.enrichment_model,
           surface_model.pointwise_enrichment_model_data,
           f2,
-          [f1, f1_wrapped](const simple_math::Point& p) -> const bool {
+          [f1, f1_wrapped](const finite_element::FiniteElementConstAccessor& curr_fe,
+                           const finite_element::LeafIndex& leaf_index,
+                           const simple_math::Point& p) -> const bool {
               const double f1_val         = f1(p);
               const double f1_wrapped_val = f1_wrapped(p);
               if (f1_val > 0)
@@ -322,7 +342,7 @@ void FractureBVP::insert_precracks_by_function_with_boolean(
 
 void FractureBVP::try_to_grow_precracks(BVPData& bvp_data) const
 {
-    auto e_workspace          = std::make_unique<finite_element::ElementWorkspace>();
+    auto e_workspace               = std::make_unique<finite_element::ElementWorkspace>();
     auto& enrichment_surfaces_data = bvp_data.enrichment_surfaces_data();
     auto xfem_param                = get_xfem_params(bvp_data);
 
@@ -342,7 +362,7 @@ void FractureBVP::try_to_grow_precracks(BVPData& bvp_data) const
 
                 if (criterion.eval(surface_data.global_surface_id,
                                    mesh::calc_mean_coordinate(front_element),
-                                          simple_math::Vector3D::Zero()))
+                                   simple_math::Vector3D::Zero()))
                 {
                     enrichment_indices_to_grow.push_back(index);
                 }
