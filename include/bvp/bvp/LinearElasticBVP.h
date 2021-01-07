@@ -8,44 +8,10 @@
 #include <memory>
 #include <vector>
 
-// TODO move this
-#if 0
-
-namespace output
-{
-    template<typename T>
-    static T from_string(const std::string & str);
-
-    enum class LinearElasticField
-    {
-        Displacement,
-        Stress,
-        Strain
-    };
-
-    template<>
-    LinearElasticField from_string(const std::string & str)
-    {
-        if (utility::istr_is_equal(str, "Displacement")) {
-            return LinearElasticField::Displacement;
-        }
-        else if (utility::istr_is_equal(str, "Stress")) {
-            return LinearElasticField::Stress;
-        }
-        else if (utility::istr_is_equal(str, "Strain")) {
-            return LinearElasticField::Strain;
-        }
-        else {
-            throw _UTIL_MSG_EXCEPT("Cannot convert from " + str);
-        }
-    }
-}
-#endif
-
 namespace bvp
 {
 
-struct LinearElasticLinearAlgebra : public BVPLinearAlgebra
+struct LinearElasticLinearAlgebra final : public BVPLinearAlgebra
 {
     // Note: BVPCoreData::gl_solution stores the current displacmeents
     std::unique_ptr<sparse_linear_algebra::Vector> eigenstrain_force;
@@ -53,6 +19,11 @@ struct LinearElasticLinearAlgebra : public BVPLinearAlgebra
     std::unique_ptr<sparse_linear_algebra::SparseMatrix> stiffness;
     std::unique_ptr<sparse_linear_algebra::ConstraintMatrix> constraint_matrix;
     std::unique_ptr<sparse_linear_algebra::SparseSolver> sparse_solver;
+
+    virtual std::vector<sparse_linear_algebra::Vector*> vectors() const override;
+    virtual std::vector<sparse_linear_algebra::SparseMatrix*> matrices() const override;
+    virtual std::vector<sparse_linear_algebra::ConstraintMatrix*> constraint_matrices()
+      const override;
 };
 
 /// A linear elastic analysis
@@ -67,7 +38,7 @@ class LinearElasticBVP : public BoundaryValueProblem
 
     virtual ~LinearElasticBVP() {}
 
-    
+
     /// @brief Solves the next time step for the boundary value problem, if there any remaining.
     virtual SolveTimeStepResult solve_next_time_step(BVPData& bvp_data) const override;
 
@@ -78,9 +49,8 @@ class LinearElasticBVP : public BoundaryValueProblem
     virtual bool is_end_for_time_steps(BVPData& bvp_data) const override;
 
   protected:
-
     LinearElasticBVP() {}
-    
+
     /// @brief Initializes the linear algebra containers (bvp_data.core_data.gl_solution and
     /// bvp_data.gl_lin_alg).
     ///
@@ -92,6 +62,5 @@ class LinearElasticBVP : public BoundaryValueProblem
     ///
     /// Modifies the constraint matrix and appropriate vectors in bvp_data.gl_lin_alg.
     virtual void apply_boundary_conditions(BVPData& bvp_data) const override;
-
 };
 }

@@ -1,5 +1,4 @@
 #include "bvp/bvp/BVPData.h"
-
 #include "bvp/bvp/Serialization.h"
 #include "utility/MPIUtils.h"
 #include "utility/serialization/Serialization.h"
@@ -29,6 +28,67 @@ struct OffsetInformation
     }
 };
 
+
+BVPCoreData::BVPCoreData(BVPCoreData&& other) noexcept
+{
+    output_dir          = std::move(other.output_dir);
+    time_discr_data     = std::move(other.time_discr_data);
+    fe_mesh             = std::move(other.fe_mesh);
+    dof_manager         = std::move(other.dof_manager);
+    boundary_conditions = std::move(other.boundary_conditions);
+    gl_solution         = std::move(other.gl_solution);
+    if (gl_solution != nullptr)
+    {
+        gl_solution->update_dof_refs(create_dof_refs(dof_manager));
+    }
+    enrichment_surfaces_data = std::move(other.enrichment_surfaces_data);
+}
+
+BVPData::BVPData(BVPData&& other) noexcept
+  : core_data(std::move(other.core_data))
+  , secondary_data(std::move(other.secondary_data))
+  , gl_lin_alg(std::move(other.gl_lin_alg))
+{
+    if (gl_lin_alg != nullptr)
+    {
+        auto dof_refs = create_dof_refs(core_data.dof_manager);
+
+        // The dof references must be updated since the address of the dof_manager and
+        // (consequently) the dof maps have changed
+        for (auto& vector : gl_lin_alg->vectors())
+        {
+            vector->update_dof_refs(dof_refs);
+        }
+        for (auto& matrix : gl_lin_alg->matrices())
+        {
+            matrix->update_dof_refs(dof_refs);
+        }
+        for (auto& constraint_matrix : gl_lin_alg->constraint_matrices())
+        {
+            constraint_matrix->update_dof_refs(dof_refs);
+        }
+    }
+}
+
+int query_n_ranks_for_bvp_data(const std::string filestem)
+{
+    auto filestem_fs = fs::path(filestem);
+    std::string filestem_sanitized =
+      (filestem_fs.parent_path() / filestem_fs.stem()).generic_string();
+    std::string json_path = filestem_sanitized + ".bvp.json";
+
+    _UTIL_ASSERT(fs::exists(json_path),
+                 "The JSON part of the data file \"" + json_path + "\" did not exist.");
+
+    json j;
+    std::ifstream json_in(json_path);
+    json_in >> j;
+    OffsetInformation offset_info;
+    OffsetInformation::from_json(j["offset_info"], offset_info);
+
+    return offset_info.n_ranks;
+}
+
 BVPData load_bvp_data(const std::string filestem)
 {
     return load_bvp_data(filestem, utility::MPIUtils::get_local_rank());
@@ -37,9 +97,11 @@ BVPData load_bvp_data(const std::string filestem)
 BVPData load_bvp_data(const std::string filestem, int rank_to_load)
 {
     // Strip an extension if one was given
-    fs::path filestem_fs    = fs::path(filestem).stem();
-    std::string binary_path = filestem_fs.generic_string() + ".bvp.bin";
-    std::string json_path   = filestem_fs.generic_string() + ".bvp.json";
+    auto filestem_fs = fs::path(filestem);
+    std::string filestem_sanitized =
+      (filestem_fs.parent_path() / filestem_fs.stem()).generic_string();
+    std::string binary_path = filestem_sanitized + ".bvp.bin";
+    std::string json_path   = filestem_sanitized + ".bvp.json";
 
     _UTIL_ASSERT(fs::exists(binary_path),
                  "The binary part of the data file \"" + binary_path + "\" did not exist.");
@@ -65,15 +127,16 @@ BVPData load_bvp_data(const std::string filestem, int rank_to_load)
     bin_in.close();
 
     return std::move(bvp_data);
-
 }
 
 void save_bvp_data(const BVPData& bvp_data, const std::string filestem)
 {
     // Strip an extension if one was given
-    fs::path filestem_fs    = fs::path(filestem).stem();
-    std::string binary_path = filestem_fs.generic_string() + ".bvp.bin";
-    std::string json_path   = filestem_fs.generic_string() + ".bvp.json";
+    auto filestem_fs = fs::path(filestem);
+    std::string filestem_sanitized =
+      (filestem_fs.parent_path() / filestem_fs.stem()).generic_string();
+    std::string binary_path = filestem_sanitized + ".bvp.bin";
+    std::string json_path   = filestem_sanitized + ".bvp.json";
 
     // Count how many bytes will be needed for the serialized data by rank
     utility::SerialByteCounter byte_counter;
@@ -160,6 +223,17 @@ void save_bvp_data_json(const BVPData& bvp_data, const std::string filestem)
     s(utility::named_ref("bvp_data", bvp_data));
     s.write_out();
     file.close();
+}
+
+sparse_linear_algebra::DofMapRefs create_dof_refs(const dof_manager::DofManager& dof_manager)
+{
+    auto& dof_maps        = dof_manager.get_dof_maps();
+    auto& enrichment_data = dof_manager.get_enrichment_data();
+    return { dof_maps.n_owned_dofs,           dof_maps.n_local_ghost_dofs,
+             dof_maps.n_exclusive_ghost_dofs, dof_maps.owned_global_dof_begin,
+             dof_maps.owned_global_dof_end,   dof_maps.n_owned_elements,
+             dof_maps.element_to_rank_maps,   dof_maps.element_n_dofs,
+             dof_maps.rank_to_global_map,     enrichment_data.new_dof_to_old_rank_map };
 }
 
 }

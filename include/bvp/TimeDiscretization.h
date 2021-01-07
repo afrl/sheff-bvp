@@ -14,6 +14,7 @@ enum class TimeDiscretizationType
 struct TimeDiscretizationData
 {
     int last_converged_time_step = -1;
+    double last_convered_time    = 0.0;
     TimeDiscretizationType type  = TimeDiscretizationType::STATIC;
 
     //////////////////////////////////////////////////////////////////////////////////////////////
@@ -23,13 +24,14 @@ struct TimeDiscretizationData
     void serialize(SerializerType& s) const
     {
         s(utility::named_ref("last_converged_time_step", last_converged_time_step),
+          utility::named_ref("last_convered_time", last_convered_time),
           utility::named_value("type", type));
     }
 
     template<typename SerializerType>
     void deserialize(SerializerType& s)
     {
-        s(last_converged_time_step, type);
+        s(last_converged_time_step, last_convered_time, type);
     }
 };
 }

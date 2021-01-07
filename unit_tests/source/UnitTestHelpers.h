@@ -30,14 +30,10 @@ static std::string get_test_name(const std::string& test_filepath)
 static fs::path get_output_directory(const std::string& test_filepath)
 {
     auto test_name = get_test_name(test_filepath);
-    std::string output_dir;
+    std::string output_dir = "./";
     if (fs::exists(fs::path("./") / "Output"))
     {
         output_dir = "./Output/" + test_name;
-    }
-    else
-    {
-        output_dir = "./" + test_name;
     }
     if (!fs::exists(output_dir))
     {

@@ -239,18 +239,8 @@ void BoundaryValueProblem::init_core_data(BVPData& bvp_data) const
 
     if (!bvp_data.core_data.gl_solution)
     {
-        auto& dof_maps                             = bvp_data.dof_manager().get_dof_maps();
-        auto& enrichment_data                      = bvp_data.dof_manager().get_enrichment_data();
-        sparse_linear_algebra::DofMapRefs dof_refs = {
-            dof_maps.n_owned_dofs,           dof_maps.n_local_ghost_dofs,
-            dof_maps.n_exclusive_ghost_dofs, dof_maps.owned_global_dof_begin,
-            dof_maps.owned_global_dof_end,   dof_maps.n_owned_elements,
-            dof_maps.element_to_rank_maps,   dof_maps.element_n_dofs,
-            dof_maps.rank_to_global_map,     enrichment_data.new_dof_to_old_rank_map
-        };
-
-        bvp_data.core_data.gl_solution =
-          sparse_linear_algebra::LinAlgFactory::create_vector(dof_refs);
+        bvp_data.core_data.gl_solution = sparse_linear_algebra::LinAlgFactory::create_vector(
+          create_dof_refs(bvp_data.dof_manager()));
         bvp_data.core_data.gl_solution->allocate();
     }
 

@@ -1,11 +1,11 @@
 #pragma once
 
 #include "assembler/Assembler.h"
-#include "dof_manager/DofManager.h"
 #include "bvp/Defines.h"
 #include "bvp/TimeDiscretization.h"
 #include "bvp/bc/BoundaryCondition.h"
 #include "bvp/bc/Serialization.h"
+#include "dof_manager/DofManager.h"
 #include "xfem/XFEM.h"
 
 namespace bvp
@@ -21,6 +21,9 @@ struct BVPCoreData
     std::vector<std::unique_ptr<BoundaryCondition>> boundary_conditions;
     std::unique_ptr<sparse_linear_algebra::Vector> gl_solution;
     std::vector<xfem::EnrichmentSurfaceData> enrichment_surfaces_data;
+
+    BVPCoreData() = default;
+    BVPCoreData(BVPCoreData&&) noexcept;
 };
 
 /// @brief Data that can be recovered from BVPCoreData or set directly
@@ -36,6 +39,11 @@ struct BVPSecondaryData
 /// allowing each type of BVP to define its own list of linear algebra structures.
 struct BVPLinearAlgebra
 {
+    virtual ~BVPLinearAlgebra() {}
+
+    virtual std::vector<sparse_linear_algebra::Vector*> vectors() const = 0;
+    virtual std::vector<sparse_linear_algebra::SparseMatrix*> matrices() const = 0;
+    virtual std::vector<sparse_linear_algebra::ConstraintMatrix*> constraint_matrices() const = 0;
 };
 
 /// @brief Data structure that holds all of the data relevant to a boundary value problem.
@@ -48,6 +56,9 @@ struct BVPData
     BVPCoreData core_data;
     BVPSecondaryData secondary_data;
     std::unique_ptr<BVPLinearAlgebra> gl_lin_alg;
+
+    BVPData() = default;
+    BVPData(BVPData&&) noexcept;
 
     //////////////////////////////////////////////////////////////////////////////////////////////
     // Short-hand accessors to ease navigating the structs
@@ -141,6 +152,11 @@ struct BVPData
     }
 };
 
+/// @brief Queries how many ranks were running for BVPData saved to the given file.
+/// @param filename - name of the file to load (extension will be ignored if given)
+/// @return Number of ranks that saved the data.
+int query_n_ranks_for_bvp_data(const std::string filestem);
+
 /// @brief Load a binary serialization of a BVPData object in the given file.
 /// @param filename - name of the file to load (extension will be ignored if given)
 ///
@@ -172,4 +188,9 @@ void save_bvp_data(const BVPData& bvp_data, const std::string filestem);
 /// Note: if distributed, then each rank will write to its own text file "<filestem>_<rank id>.txt",
 /// otherwise this will write to  "<filestem>.txt"
 void save_bvp_data_json(const BVPData& bvp_data, const std::string filestem);
+
+/// @brief Structures in the sparse_linear_algebra modules require references to DoF maps, and this
+/// function creates the structure holding the references from the dof_manager.  It is called by the
+/// BVPCoreData move constructor and BoundaryValueProblem::init_core_data.
+sparse_linear_algebra::DofMapRefs create_dof_refs(const dof_manager::DofManager& dof_manager);
 }
