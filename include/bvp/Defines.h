@@ -22,7 +22,7 @@ struct BVPGlobalOptions
         return opts;
     }
 
-    bool save_matrices = false;
+    bool save_global_matrices = false;
 
   private:
     BVPGlobalOptions() = default;

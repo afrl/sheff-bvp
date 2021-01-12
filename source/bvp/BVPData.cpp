@@ -207,16 +207,16 @@ void save_bvp_data(const BVPData& bvp_data, const std::string filestem)
 
 void save_bvp_data_json(const BVPData& bvp_data, const std::string filestem)
 {
-    auto filestem_fs = fs::path(filestem).stem();
+    auto filestem_fs = fs::path(filestem).parent_path() / fs::path(filestem).stem();
     std::string filename;
     if (!utility::MPIUtils::is_distributed())
     {
-        filename = filestem_fs.generic_string() + ".txt";
+        filename = filestem_fs.generic_string() + ".json";
     }
     else
     {
         filename = filestem_fs.generic_string() + "_" +
-                   std::to_string(utility::MPIUtils::get_local_rank()) + ".txt";
+                   std::to_string(utility::MPIUtils::get_local_rank()) + ".json";
     }
     std::ofstream file(filename);
     utility::JSONSerializer s(file);

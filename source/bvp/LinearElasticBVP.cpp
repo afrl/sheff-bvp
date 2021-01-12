@@ -143,7 +143,7 @@ SolveTimeStepResult LinearElasticBVP::solve_next_time_step(BVPData& bvp_data) co
     // Total RHS = constraint RHS + applied loads + inelastic RHS (temperature/moisture terms)
     gl_rhs = gl_rhs + gl_eigenstrain_force;
 
-    if (BVPGlobalOptions::get().save_matrices)
+    if (BVPGlobalOptions::get().save_global_matrices)
     {
         gl_stiffness.save((ts_dir / "matrix_pre_constraints.bin").generic_string());
         gl_rhs.save((ts_dir / "rhs_pre_constraints.bin").generic_string());
@@ -160,7 +160,7 @@ SolveTimeStepResult LinearElasticBVP::solve_next_time_step(BVPData& bvp_data) co
 
     _F_END();
 
-    if (BVPGlobalOptions::get().save_matrices)
+    if (BVPGlobalOptions::get().save_global_matrices)
     {
         gl_stiffness.save((ts_dir / "matrix_post_constraints.bin").generic_string());
         gl_rhs.save((ts_dir / "rhs_post_constraints.bin").generic_string());
