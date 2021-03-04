@@ -1,6 +1,7 @@
 #include "../UnitTestHelpers.h"
 #include "bvp/bvp/FractureBVP.h"
 #include "constitutive/enrichment/deformation/bonded/BondedInterfaceProperties.h"
+#include "constitutive/enrichment/deformation/traction_free/TractionFreeInterfaceProperties.h"
 #include "constitutive/field/deformation/linear_elasticity/LinearElasticProperties.h"
 #include "mesh/algorithms/Creation.h"
 
@@ -15,14 +16,19 @@ int main(int argc, char** argv)
       &argc,
       &argv);
 
+    bvp::BVPGlobalOptions::get().save_global_matrices = true;
+
     //////////////////////////////////////////////////////////////////////////////////////////////
     // Properties
 
     constitutive::add_field_properties(
       "isotropic",
-      constitutive::LinearElasticProperties::create_isotropic_E_nu(1e9, 0.3));
+      constitutive::LinearElasticProperties::create_isotropic_E_nu(1, 0.3));
 
-    auto surf_props = constitutive::add_enrichment_properties(
+    auto traction_free = constitutive::add_enrichment_properties(
+      "traction_free",
+      constitutive::TractionFreeInterfaceProperties::create());
+    auto bonded = constitutive::add_enrichment_properties(
       "bonded",
       constitutive::BondedInterfaceProperties::create(1e20));
 
@@ -62,7 +68,7 @@ int main(int argc, char** argv)
                                          sphere_radius;
               return signed_dist;
           },
-          surf_props,
+          traction_free,
           constitutive::FieldPropertiesCollectionRef() } });
 
     bvp.solve_time_steps(bvp_data);

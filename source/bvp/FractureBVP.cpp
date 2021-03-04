@@ -6,7 +6,6 @@
 #include "finite_element/hhe_primitives/PrimitiveAlgorithms.h"
 #include "mesh/algorithms/Search.h"
 #include "xfem/XFEM.h"
-#include "xfem/dof_algorithm/CGXFEMDofAlgorithm.h"
 
 #include <memory>
 
@@ -432,8 +431,20 @@ SolveTimeStepResult FractureBVP::solve_next_time_step(BVPData& bvp_data) const
 
 void FractureBVP::renumber_dofs(BVPData& bvp_data) const
 {
-    if (bvp_data.dof_manager().requires_renumber())
+    if (bvp_data.dof_manager().requires_renumber(bvp_data.fe_mesh()))
     {
+        auto new_to_old_dof_clone_map =
+          bvp_data.dof_manager().renumber(bvp_data.fe_mesh(),
+                                          bvp_data.adjacency_list(),
+                                          bvp_data.element_scatter_map());
+
+        bvp_data.solution().update_for_renumbering(new_to_old_dof_clone_map);
+        auto& lin_alg = static_cast<LinearElasticLinearAlgebra&>(*bvp_data.gl_lin_alg);
+        lin_alg.rhs->update_for_renumbering(new_to_old_dof_clone_map);
+        lin_alg.eigenstrain_force->update_for_renumbering(new_to_old_dof_clone_map);
+        lin_alg.stiffness->update_for_renumbering(new_to_old_dof_clone_map);
+
+        /* This is the old way of doing it
         auto renumber_data = bvp_data.dof_manager().renumber(bvp_data.element_scatter_map());
 
         // Rearrange the data for the sparse_linear_algebra interface
@@ -461,7 +472,7 @@ void FractureBVP::renumber_dofs(BVPData& bvp_data) const
         lin_alg.eigenstrain_force->renumber_dofs(copy_old_local_value_sources,
                                                  copy_new_ghost_value_sources);
         lin_alg.stiffness->renumber_dofs(copy_old_local_value_sources,
-                                         copy_new_ghost_value_sources);
+                                         copy_new_ghost_value_sources);*/
     }
 }
 

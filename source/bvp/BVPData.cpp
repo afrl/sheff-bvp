@@ -228,12 +228,11 @@ void save_bvp_data_json(const BVPData& bvp_data, const std::string filestem)
 sparse_linear_algebra::DofMapRefs create_dof_refs(const dof_manager::DofManager& dof_manager)
 {
     auto& dof_maps        = dof_manager.get_dof_maps();
-    auto& enrichment_data = dof_manager.get_enrichment_data();
     return { dof_maps.n_owned_dofs,           dof_maps.n_local_ghost_dofs,
              dof_maps.n_exclusive_ghost_dofs, dof_maps.owned_global_dof_begin,
              dof_maps.owned_global_dof_end,   dof_maps.n_owned_elements,
              dof_maps.element_to_rank_maps,   dof_maps.element_n_dofs,
-             dof_maps.rank_to_global_map,     enrichment_data.new_dof_to_old_rank_map };
+             dof_maps.rank_to_global_map };
 }
 
 }

@@ -17,6 +17,8 @@ int main(int argc, char** argv)
       &argc,
       &argv);
 
+    bvp::BVPGlobalOptions::get().save_global_matrices = true;
+
     //////////////////////////////////////////////////////////////////////////////////////////////
     // Properties
 
@@ -61,5 +63,5 @@ int main(int argc, char** argv)
 
     bvp.solve_time_steps(bvp_data);
 
-	return 0;
+    return 0;
 }

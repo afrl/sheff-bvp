@@ -17,7 +17,7 @@ int main(int argc, char** argv)
       &argv);
 
     // Write matrices (and vectors) to binary files to examine.
-    BVPGlobalOptions::get().save_matrices = true;
+    BVPGlobalOptions::get().save_global_matrices = true;
 
     //////////////////////////////////////////////////////////////////////////////////////////////
     // Properties
