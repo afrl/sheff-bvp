@@ -6,6 +6,7 @@
 #include "bvp/bc/BoundaryCondition.h"
 #include "bvp/bc/Serialization.h"
 #include "dof_manager/DofManager.h"
+#include "sparse_linear_algebra/SparseSolverOptions.h"
 #include "xfem/XFEM.h"
 
 namespace bvp
@@ -15,6 +16,7 @@ struct BVPCoreData
 {
     fs::path output_dir;
     TimeDiscretizationData time_discr_data;
+    sparse_linear_algebra::SparseSolverOptions solver_opts;
 
     finite_element::FiniteElementMesh fe_mesh;
     dof_manager::DofManager dof_manager;
@@ -41,8 +43,8 @@ struct BVPLinearAlgebra
 {
     virtual ~BVPLinearAlgebra() {}
 
-    virtual std::vector<sparse_linear_algebra::Vector*> vectors() const = 0;
-    virtual std::vector<sparse_linear_algebra::SparseMatrix*> matrices() const = 0;
+    virtual std::vector<sparse_linear_algebra::Vector*> vectors() const                       = 0;
+    virtual std::vector<sparse_linear_algebra::SparseMatrix*> matrices() const                = 0;
     virtual std::vector<sparse_linear_algebra::ConstraintMatrix*> constraint_matrices() const = 0;
 };
 
@@ -53,8 +55,12 @@ struct BVPLinearAlgebra
 /// will be modified to solve the related boundary value problem.
 struct BVPData
 {
+    /// Partially initialized as the BVP is set up, but fully initialized when
+    /// BVP::solve_time_steps() is called
     BVPCoreData core_data;
+    /// Initialized when BVP::solve_time_steps() is called
     BVPSecondaryData secondary_data;
+    /// Initialized when BVP::solve_time_steps() is called
     std::unique_ptr<BVPLinearAlgebra> gl_lin_alg;
 
     BVPData() = default;

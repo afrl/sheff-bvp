@@ -14,6 +14,7 @@ void serialize(SerializerType& s, const bvp::BVPData& bvp_data)
 {
     s(utility::named_value("output_dir", bvp_data.core_data.output_dir.generic_string()),
       utility::named_ref("time_discr_data", bvp_data.core_data.time_discr_data),
+      utility::named_ref("solver_opts", bvp_data.core_data.solver_opts),
       utility::named_ref("fe_mesh", bvp_data.core_data.fe_mesh),
       utility::named_ref("dof_manager", bvp_data.core_data.dof_manager),
       utility::named_value("n_boundary_conditions", bvp_data.core_data.boundary_conditions.size()),
@@ -44,6 +45,7 @@ void deserialize(SerializerType& s, bvp::BVPData& bvp_data)
     std::string output_dir_str;
     s(output_dir_str,
       bvp_data.core_data.time_discr_data,
+      bvp_data.core_data.solver_opts,
       bvp_data.core_data.fe_mesh,
       bvp_data.core_data.dof_manager);
     bvp_data.core_data.output_dir = output_dir_str;

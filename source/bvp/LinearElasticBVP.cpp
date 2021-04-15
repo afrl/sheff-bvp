@@ -67,10 +67,8 @@ void LinearElasticBVP::init_lin_algebra(BVPData& bvp_data) const
     lin_alg.rhs = sparse_linear_algebra::LinAlgFactory::create_vector(dof_refs);
     lin_alg.rhs->allocate();
 
-    sparse_linear_algebra::SparseSolverOptions opts;
-    opts.relative_tol          = 1e-16;
-    opts.requires_nonsymmetric = false;
-    lin_alg.sparse_solver      = sparse_linear_algebra::LinAlgFactory::create_solver(opts);
+    lin_alg.sparse_solver =
+      sparse_linear_algebra::LinAlgFactory::create_solver(bvp_data.core_data.solver_opts);
 }
 
 void LinearElasticBVP::apply_boundary_conditions(BVPData& bvp_data) const
