@@ -199,6 +199,8 @@ int main(int argc, char** argv)
     std::cout << "Finding the eigenvalues of each sample." << std::endl;
     std::size_t output_mark = samples.size() / 10;
     std::vector<std::pair<int, double>> samples_min_eigenvalues;
+    std::vector<double> surface_areas;
+    std::vector<double> min_field_volumes;
     for (auto i : utility::indices(samples))
     {
         auto& sample = samples[i];
@@ -258,9 +260,13 @@ int main(int argc, char** argv)
 
             auto basal_field_0_volume = sum_quad_weights(*fe_mesh.layouts[0], 0);
             auto basal_field_1_volume = sum_quad_weights(*fe_mesh.layouts[0], 1);
-            auto min_volume           = std::min(basal_field_0_volume, basal_field_1_volume);
 
-            auto surface_volume = sum_enrichment_quad_weights(*fe_mesh.layouts[0], 0);
+            min_field_volumes.push_back(std::min(basal_field_0_volume, basal_field_1_volume));
+            if (basal_field_0_volume > 8.0 || basal_field_1_volume > 8.0)
+            {
+                return 1;
+            }
+            surface_areas.push_back(sum_enrichment_quad_weights(*fe_mesh.layouts[0], 0));
 
             auto& block_K   = element_mat_vecs_0.lhs_matrix;
             auto block_size = element_mat_vecs_0.lhs_matrix.get_block(0, 0).rows();
@@ -328,13 +334,23 @@ int main(int argc, char** argv)
         [&curr_normal](const int& crack_index, const simple_math::Point& p)
           -> simple_math::Vector3D { return curr_normal; }));
 
+    simple_math::GeneralVector correct_solution(48);
+    correct_solution << 0.0, 0.0, 0.0, 0.0, -0.3, 0.0, 0.0, -0.3, -0.3, 0.0, 0.0, -0.3, 1.0, 0.0,
+      0.0, 1.0, -0.3, 0.0, 1.0, -0.3, -0.3, 1.0, 0.0, -0.3, 0.0, 0.0, 0.0, 0.0, -0.3, 0.0, 0.0,
+      -0.3, -0.3, 0.0, 0.0, -0.3, 1.0, 0.0, 0.0, 1.0, -0.3, 0.0, 1.0, -0.3, -0.3, 1.0, 0.0, -0.3;
+
     std::cout << "Testing solvers on a BVP for each sample" << std::endl;
     std::size_t count = 0;
     output_mark       = samples_min_eigenvalues.size() / 10;
     std::ofstream out("solver_results.csv");
-    out << "i,x,y,z,n_x,n_y,n_z,min_nonsingular_eigenvalue,succeeded,solver_type,pc_type,n_"
-           "iterations,residual_norm,time (# of microseconds)"
-        << std::endl;
+    out << "i,x,y,z,n_x,n_y,n_z,min_nonsingular_eigenvalue,enrichment_surface_area,min_field_"
+           "volume,area_to_volume_ratio,";
+    for (auto& solver : solvers_to_test)
+    {
+        out << "solver_type, pc_type,n_iterations,residual_norm (from solver),residual_norm "
+               "(calculated),time (# of microseconds),";
+    }
+    out << std::endl;
     for (auto& sample_min_eigenvalue : samples_min_eigenvalues)
     {
         auto& sample         = samples[sample_min_eigenvalue.first];
@@ -347,6 +363,13 @@ int main(int argc, char** argv)
                       << "% complete (at " << count << ")\n";
         }
 
+        out << sample_min_eigenvalue.first << "," << sample.position.x() << ","
+            << sample.position.y() << "," << sample.position.z() << "," << sample.normal.x() << ","
+            << sample.normal.y() << "," << sample.normal.z() << "," << min_eigenvalue << ","
+            << surface_areas[sample_min_eigenvalue.first] << ","
+            << min_field_volumes[sample_min_eigenvalue.first] << ","
+            << surface_areas[sample_min_eigenvalue.first] /
+                 min_field_volumes[sample_min_eigenvalue.first] << ",";
         for (auto& solver : solvers_to_test)
         {
 
@@ -357,6 +380,7 @@ int main(int argc, char** argv)
             solver_opts.preffered_preconditioner = solver.first;
             solver_opts.preferred_solver         = solver.second;
             solver_opts.max_iterations           = 200;
+            solver_opts.relative_tol             = 1e-18;
             sparse_linear_algebra::SolverStatus solver_status;
             solver_opts.status_callback =
               [&solver_status](const sparse_linear_algebra::SolverStatus& status) {
@@ -391,33 +415,28 @@ int main(int argc, char** argv)
 
                 auto stop = std::chrono::high_resolution_clock::now();
 
-                out << sample_min_eigenvalue.first << "," << sample.position.x() << ","
-                    << sample.position.y() << "," << sample.position.z() << "," << sample.normal.x()
-                    << "," << sample.normal.y() << "," << sample.normal.z() << "," << min_eigenvalue
-                    << "," << 1 << "," << solver_status.string_stats["ksp_type"] << ","
+                auto solution = bvp_data.solution().get_as_eigen_vector();
+
+                out << solver_status.string_stats["ksp_type"] << ","
                     << solver_status.string_stats["pc_type"] << ","
                     << solver_status.integral_stats["n_iterations"] << ","
                     << solver_status.float_stats["residual_norm"] << ","
+                    << (correct_solution - solution).norm() << ","
                     << std::chrono::duration_cast<std::chrono::microseconds>(stop - start).count()
-                    << std::endl;
+                    << ",";
             }
             catch (...)
             {
-                out << sample_min_eigenvalue.first << "," << sample.position.x() << ","
-                    << sample.position.y() << "," << sample.position.z() << "," << sample.normal.x()
-                    << "," << sample.normal.y() << "," << sample.normal.z() << "," << min_eigenvalue
-                    << "," << 0 << "," << std::endl;
-
-                std::cout << "Sample " << count << " failed: " << std::endl
-                          << "  pc = " << sparse_linear_algebra::to_string(solver.first)
-                          << " solver = " << sparse_linear_algebra::to_string(solver.second)
-                          << std::endl
-                          << "  position = (" << sample.position(0) << ", " << sample.position(1)
-                          << ", " << sample.position(2) << ")" << std::endl
-                          << "  normal = (" << sample.normal(0) << ", " << sample.normal(1) << ", "
-                          << sample.normal(2) << ")" << std::endl;
+                out << solver_status.string_stats["ksp_type"] << ","
+                    << solver_status.string_stats["pc_type"] << ","
+                    << solver_status.integral_stats["n_iterations"] << ","
+                    << solver_status.float_stats["residual_norm"] << ","
+                    << "error"
+                    << "error"
+                    << ",";
             }
         }
+        out << std::endl;
         count++;
     }
     out.close();
