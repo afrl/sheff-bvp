@@ -1,6 +1,7 @@
 #pragma once
 
 #include "bvp/bc/DirchletBC.h"
+#include "bvp/bc/TractionBC.h"
 #include "bvp/bvp/BVPData.h"
 #include "fea_io/common/MPIUtils.h"
 #include "mesh/algorithms/Groups.h"
@@ -106,6 +107,16 @@ static void add_extent_node_groups(mesh::Mesh& mesh)
       "pos_z",
       mesh::NodeSelection(
         [val = max_coord[2]](const mesh::NodeConstAccessor& n) -> bool { return n.z() == val; }));
+}
+
+
+static void add_symmetry_about_0_planes_bcs(BVPData& bvp_data)
+{
+    add_extent_node_groups(bvp_data.mesh());
+
+    bvp_data.add_bc(DirichletBC("neg_x", { 0, 0 }));
+    bvp_data.add_bc(DirichletBC("neg_y", { 1, 0 }));
+    bvp_data.add_bc(DirichletBC("neg_z", { 2, 0 }));
 }
 
 static void add_unit_tension_x_bcs(BVPData& bvp_data)

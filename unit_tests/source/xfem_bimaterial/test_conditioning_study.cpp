@@ -212,7 +212,7 @@ int main(int argc, char** argv)
 
         auto& normal = sample.normal;
 
-        FiniteElementMesh fe_mesh(mesh::get_unit_linear_hex());
+        FiniteElementMesh fe_mesh(mesh::get_unit_element(mesh::ElementType::H3D8N));
         for (auto& finite_element : fe_mesh.finite_elements())
         {
             model_selection.assign_field_models(finite_element, "InfinitesimalStrain", props_ref);
@@ -387,7 +387,7 @@ int main(int argc, char** argv)
                   solver_status = status;
               };
 
-            bvp.set_input(std::move(mesh::get_unit_linear_hex()),
+            bvp.set_input(std::move(mesh::get_unit_element(mesh::ElementType::H3D8N)),
                           get_test_name(__FILE__),
                           (get_output_directory(__FILE__) / "output").string(),
                           bvp_data);

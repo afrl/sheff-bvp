@@ -56,7 +56,7 @@ void LinearElasticBVP::init_lin_algebra(BVPData& bvp_data) const
     // Right now, penalty is all that works.  Switch this to in-place elimination when that works.
     lin_alg.constraint_matrix = sparse_linear_algebra::LinAlgFactory::create_constraint_matrix(
       dof_refs,
-      sparse_linear_algebra::ConstraintMethod::Penalty);
+      bvp_data.core_data.solver_opts.constraint_method);
 
     lin_alg.stiffness = sparse_linear_algebra::LinAlgFactory::create_matrix(dof_refs);
     lin_alg.stiffness->set_constraint_matrix(lin_alg.constraint_matrix.get());

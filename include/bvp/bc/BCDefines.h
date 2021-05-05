@@ -11,7 +11,8 @@ namespace bvp
 enum class BCType : int8_t
 {
     DIRICHLET,
-    NEUMANN
+    NEUMANN,
+    TRACTION
 };
 
 static std::string to_string(const BCType& type)
@@ -20,6 +21,7 @@ static std::string to_string(const BCType& type)
     {
         case BCType::DIRICHLET: return "DIRICHLET";
         case BCType::NEUMANN: return "NEUMANN";
+        case BCType::TRACTION: return "TRACTION";
         default: throw _UTIL_MSG_EXCEPT("String conversion not implemented for given BCType enum.");
     }
 }

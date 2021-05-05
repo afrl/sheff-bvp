@@ -27,7 +27,7 @@ int main(int argc, char** argv)
     auto bvp = LinearElasticBVP::get();
     BVPData bvp_data;
 
-    bvp.set_input(mesh::get_unit_linear_hex(),
+    bvp.set_input(mesh::get_unit_element(mesh::ElementType::H3D8N),
                   get_test_name(__FILE__),
                   (get_output_directory(__FILE__) / "output").string(),
                   bvp_data);

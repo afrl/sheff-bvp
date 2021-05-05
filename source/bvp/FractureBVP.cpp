@@ -48,7 +48,8 @@ void FractureBVP::insert_precracks(BVPData& bvp_data,
 
         auto& direction_criteria             = initation.direction_criterion;
         simple_math::VoigtVector zero_stress = simple_math::VoigtVector::Zero(6);
-        auto global_surface_id               = enrichment_surfaces_data.size() - 1;
+        auto global_surface_id =
+          static_cast<xfem::EnrichmentSurfaceID>(enrichment_surfaces_data.size() - 1);
         auto crack_normal =
           direction_criteria.get().eval(global_surface_id, initation.initiation_point, zero_stress);
 

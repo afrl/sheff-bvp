@@ -2,6 +2,7 @@
 
 #include "BoundaryCondition.h"
 #include "DirchletBC.h"
+#include "TractionBC.h"
 #include "utility/serialization/NamedValue.h"
 
 #include <memory>
@@ -20,6 +21,12 @@ void serialize(SerializerType& s, const std::unique_ptr<bvp::BoundaryCondition>&
     if (type == bvp::BCType::DIRICHLET)
     {
         auto& typed_bc = static_cast<const bvp::DirichletBC&>(*bc);
+        s(utility::named_ref("data", typed_bc));
+        return;
+    }
+    else if (type == bvp::BCType::TRACTION)
+    {
+        auto& typed_bc = static_cast<const bvp::TractionBC&>(*bc);
         s(utility::named_ref("data", typed_bc));
         return;
     }
@@ -45,6 +52,13 @@ void deserialize(SerializerType& s, std::unique_ptr<bvp::BoundaryCondition>& bc)
     {
         bc             = std::make_unique<bvp::DirichletBC>();
         auto& typed_bc = static_cast<bvp::DirichletBC&>(*bc);
+        s(typed_bc);
+        return;
+    }
+    else if (type == bvp::BCType::TRACTION)
+    {
+        bc             = std::make_unique<bvp::TractionBC>();
+        auto& typed_bc = static_cast<bvp::TractionBC&>(*bc);
         s(typed_bc);
         return;
     }
