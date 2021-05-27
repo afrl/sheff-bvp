@@ -57,7 +57,8 @@ class BoundaryValueProblem
                    const std::string output_dir_path,
                    BVPData& bvp_data) const;
 
-    /// Sets the model for basal fields based on the formulation type and properties.
+    /// @brief Sets the model for basal fields based on the formulation type and properties.
+    ///
     /// Setting the model includes the point-wise model, the finite element model, and
     /// all model data.  The combination of objects that compose the model is determined
     /// based on the combination fo the formulation and properties given.
@@ -73,6 +74,15 @@ class BoundaryValueProblem
     ///        object will be far less memory-efficient than calling it once with a more
     ///        complex selection.
     void set_field_models(finite_element::BasalFieldSelection selection,
+                          const std::string& formulation_name,
+                          const std::string& properties_name,
+                          BVPData& bvp_data) const;
+
+    /// @brief Sets the model for basal fields based on the formulation type and properties.
+    ///
+    /// See other signature for more documentation.  This provides the same functionality except
+    /// that the list of basal fields are explicitly given.
+    void set_field_models(const std::vector<finite_element::SelectedBasalField>& selected_fields,
                           const std::string& formulation_name,
                           const std::string& properties_name,
                           BVPData& bvp_data) const;

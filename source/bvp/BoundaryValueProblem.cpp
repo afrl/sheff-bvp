@@ -170,6 +170,20 @@ void BoundaryValueProblem::set_field_models(finite_element::BasalFieldSelection 
                                             const std::string& properties_name,
                                             BVPData& bvp_data) const
 {
+    selection.run_selection(bvp_data.fe_mesh());
+    std::vector<finite_element::SelectedBasalField> selected_fields(
+      selection.get_selection().begin(),
+      selection.get_selection().end());
+
+    set_field_models(selected_fields, formulation_name, properties_name, bvp_data);
+}
+
+void BoundaryValueProblem::set_field_models(
+  const std::vector<finite_element::SelectedBasalField>& selected_fields,
+  const std::string& formulation_name,
+  const std::string& properties_name,
+  BVPData& bvp_data) const
+{
     _F_BEGIN();
 
     if (bvp_data.mesh().elements().size() == 0)
@@ -179,10 +193,8 @@ void BoundaryValueProblem::set_field_models(finite_element::BasalFieldSelection 
 
     auto props_ref = constitutive::FieldPropertiesCollection::singleton().get_ref(properties_name);
 
-    selection.run_selection(bvp_data.fe_mesh());
-
     auto& selection_helper = finite_element::ModelSelectionHelper::get();
-    for (auto selected_field : selection.get_selection())
+    for (auto selected_field : selected_fields)
     {
         selection_helper.assign_field_model(
           bvp_data.fe_mesh().get_finite_element(selected_field.element_index),
