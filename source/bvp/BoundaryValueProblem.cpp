@@ -251,11 +251,10 @@ void BoundaryValueProblem::init_core_data(BVPData& bvp_data) const
                                          bvp_data.element_scatter_map());
     }
 
-    if (!bvp_data.core_data.gl_solution)
+    if (bvp_data.core_data.solution.empty())
     {
-        bvp_data.core_data.gl_solution = sparse_linear_algebra::LinAlgFactory::create_vector(
-          create_dof_refs(bvp_data.dof_manager()));
-        bvp_data.core_data.gl_solution->allocate();
+        bvp_data.core_data.solution.resize(bvp_data.dof_manager().get_dof_maps().n_dofs_on_rank(),
+                                           0);
     }
 
     // Note: allocate_isvs will only allocate if the field does not already have ISV's allocated.

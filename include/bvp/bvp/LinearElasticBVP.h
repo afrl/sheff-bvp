@@ -13,7 +13,7 @@ namespace bvp
 
 struct LinearElasticLinearAlgebra final : public BVPLinearAlgebra
 {
-    // Note: BVPCoreData::gl_solution stores the current displacmeents
+    std::unique_ptr<sparse_linear_algebra::Vector> solution;
     std::unique_ptr<sparse_linear_algebra::Vector> eigenstrain_force;
     std::unique_ptr<sparse_linear_algebra::Vector> rhs;
     std::unique_ptr<sparse_linear_algebra::SparseMatrix> stiffness;

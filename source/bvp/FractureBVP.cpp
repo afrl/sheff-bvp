@@ -439,11 +439,15 @@ void FractureBVP::renumber_dofs(BVPData& bvp_data) const
                                           bvp_data.adjacency_list(),
                                           bvp_data.element_scatter_map());
 
-        bvp_data.solution().update_for_renumbering(new_to_old_dof_clone_map);
         auto& lin_alg = static_cast<LinearElasticLinearAlgebra&>(*bvp_data.gl_lin_alg);
+        lin_alg.solution->update_for_renumbering(new_to_old_dof_clone_map);
         lin_alg.rhs->update_for_renumbering(new_to_old_dof_clone_map);
         lin_alg.eigenstrain_force->update_for_renumbering(new_to_old_dof_clone_map);
         lin_alg.stiffness->update_for_renumbering(new_to_old_dof_clone_map);
+
+        // Update the local copy of the solution after renumbering in case element parts are needed
+        // during an assembly
+        lin_alg.solution->update_local_array(bvp_data.solution());
 
         /* This is the old way of doing it
         auto renumber_data = bvp_data.dof_manager().renumber(bvp_data.element_scatter_map());
@@ -481,11 +485,14 @@ xfem::Params FractureBVP::get_xfem_params(BVPData& bvp_data) const
 {
     // Create the callback for the fea_crack module to get the element solution
     // vector when evaluating the direction criteria.
+    const auto& solution = bvp_data.solution();
+    const auto& dof_map  = bvp_data.dof_manager().get_dof_maps();
     xfem::GetElementSolutionCallback get_element_solution_cb =
-      [gl_displacement_ptr =
-         &bvp_data.solution()](const finite_element::FiniteElementConstAccessor& fe_accessor)
+      [&solution, &dof_map](const finite_element::FiniteElementConstAccessor& fe_accessor)
       -> simple_math::GeneralVector {
-        return gl_displacement_ptr->get_element_part(fe_accessor.element.local_index());
+        return assembler::extract_element_solution_vector(solution,
+                                                          dof_map,
+                                                          fe_accessor.element.local_index());
     };
 
     return xfem::make_params(bvp_data.fe_mesh(),

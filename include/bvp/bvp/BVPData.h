@@ -21,7 +21,10 @@ struct BVPCoreData
     finite_element::FiniteElementMesh fe_mesh;
     dof_manager::DofManager dof_manager;
     std::vector<std::unique_ptr<BoundaryCondition>> boundary_conditions;
-    std::unique_ptr<sparse_linear_algebra::Vector> gl_solution;
+    /// Current solution vector from the last linear algebra solve for the owned and ghost DoFs
+    /// on this rank.  This is updated each solve, which means it may not be the converged solution
+    /// for nonlinear problems. The order of DoFs follows the local indices of the DoF map.
+    std::vector<double> solution;
     std::vector<xfem::EnrichmentSurfaceData> enrichment_surfaces_data;
 
     BVPCoreData() = default;
@@ -99,6 +102,11 @@ struct BVPData
         return core_data.dof_manager;
     }
 
+    inline auto& dof_manager() const
+    {
+        return core_data.dof_manager;
+    }
+
     inline auto& bcs()
     {
         return core_data.boundary_conditions;
@@ -106,16 +114,16 @@ struct BVPData
 
     inline auto& solution()
     {
-        _UTIL_ASSERT_C(core_data.gl_solution,
+        _UTIL_ASSERT_C(core_data.solution.size() > 0,
                        "Linear algebra must be intiailized before the solution can be accessed.");
-        return *core_data.gl_solution;
+        return core_data.solution;
     }
 
     inline auto& solution() const
     {
-        _UTIL_ASSERT_C(core_data.gl_solution,
+        _UTIL_ASSERT_C(core_data.solution.size() > 0,
                        "Linear algebra must be intiailized before the solution can be accessed.");
-        return *core_data.gl_solution;
+        return core_data.solution;
     }
 
     inline auto& enrichment_surfaces_data()

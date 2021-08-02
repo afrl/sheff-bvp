@@ -21,13 +21,11 @@ void serialize(SerializerType& s, const bvp::BVPData& bvp_data)
       utility::named_value("boundary_conditions",
                            utility::slice(bvp_data.core_data.boundary_conditions.data(),
                                           bvp_data.core_data.boundary_conditions.size())));
-
-    s(utility::named_value("has_gl_solution", bvp_data.core_data.gl_solution != nullptr));
-    if (bvp_data.core_data.gl_solution)
-    {
-        s(utility::named_ref("gl_solution", *bvp_data.core_data.gl_solution));
-    }
-
+    // Since we are not writing the solution size, assert it is the expected size to avoid seg
+    // faults if something goes wrong.
+    assert(bvp_data.core_data.dof_manager.get_dof_maps().n_dofs_on_rank() ==
+           bvp_data.core_data.solution.size());
+    s(utility::named_ref("solution", utility::slice(bvp_data.core_data.solution)));
     s(utility::named_value("n_enrichment_surfaces",
                            bvp_data.core_data.enrichment_surfaces_data.size()),
       utility::named_value("enrichment_surfaces_data",
@@ -56,25 +54,8 @@ void deserialize(SerializerType& s, bvp::BVPData& bvp_data)
     s(utility::slice(bvp_data.core_data.boundary_conditions.data(),
                      bvp_data.core_data.boundary_conditions.size()));
 
-    bool has_gl_solution;
-    s(has_gl_solution);
-    if (has_gl_solution)
-    {
-        auto& dof_maps                             = bvp_data.dof_manager().get_dof_maps();
-        sparse_linear_algebra::DofMapRefs dof_refs = {
-            dof_maps.n_owned_dofs,           dof_maps.n_local_ghost_dofs,
-            dof_maps.n_exclusive_ghost_dofs, dof_maps.owned_global_dof_begin,
-            dof_maps.owned_global_dof_end,   dof_maps.n_owned_elements,
-            dof_maps.element_to_rank_maps,   dof_maps.element_n_dofs,
-            dof_maps.rank_to_global_map
-        };
-
-        bvp_data.core_data.gl_solution =
-          sparse_linear_algebra::LinAlgFactory::create_vector(dof_refs);
-        bvp_data.core_data.gl_solution->allocate();
-
-        s(*bvp_data.core_data.gl_solution);
-    }
+    bvp_data.core_data.solution.resize(bvp_data.dof_manager().get_dof_maps().n_dofs_on_rank());
+    s(utility::slice(bvp_data.core_data.solution));
 
     std::size_t n_enrichment_surfaces = 0;
     s(n_enrichment_surfaces);

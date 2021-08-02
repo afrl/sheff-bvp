@@ -62,6 +62,8 @@ void LinearElasticBVP::init_lin_algebra(BVPData& bvp_data) const
     lin_alg.stiffness->set_constraint_matrix(lin_alg.constraint_matrix.get());
     lin_alg.stiffness->allocate();
 
+    lin_alg.solution = sparse_linear_algebra::LinAlgFactory::create_vector(dof_refs);
+    lin_alg.solution->allocate();
     lin_alg.eigenstrain_force = sparse_linear_algebra::LinAlgFactory::create_vector(dof_refs);
     lin_alg.eigenstrain_force->allocate();
     lin_alg.rhs = sparse_linear_algebra::LinAlgFactory::create_vector(dof_refs);
@@ -119,9 +121,9 @@ SolveTimeStepResult LinearElasticBVP::solve_next_time_step(BVPData& bvp_data) co
     _F_BEGIN2("assembly");
 
     auto& assembler            = bvp_data.assembler();
-    auto& gl_displacement      = bvp_data.solution();
     auto& lin_alg              = static_cast<LinearElasticLinearAlgebra&>(*bvp_data.gl_lin_alg);
     auto& gl_stiffness         = *lin_alg.stiffness;
+    auto& gl_displacement      = *lin_alg.solution;
     auto& gl_eigenstrain_force = *lin_alg.eigenstrain_force;
     auto& gl_rhs               = *lin_alg.rhs;
 
@@ -134,7 +136,7 @@ SolveTimeStepResult LinearElasticBVP::solve_next_time_step(BVPData& bvp_data) co
                              &gl_eigenstrain_force);
 
     // Execute both assemblies as one element loop
-    assembler.execute(&gl_displacement);
+    assembler.execute(bvp_data.solution(), bvp_data.dof_manager().get_dof_maps());
 
     _F_END();
 
@@ -155,6 +157,7 @@ SolveTimeStepResult LinearElasticBVP::solve_next_time_step(BVPData& bvp_data) co
 
     // TODO make the solver automatically update the ghost values of the solution
     lin_alg.sparse_solver->solve(&gl_stiffness, &gl_rhs, &gl_displacement);
+    gl_displacement.update_local_array(bvp_data.solution());
 
     _F_END();
 

@@ -1,4 +1,5 @@
 #include "bvp/bvp/BVPData.h"
+
 #include "bvp/bvp/Serialization.h"
 #include "utility/MPIUtils.h"
 #include "utility/serialization/Serialization.h"
@@ -36,11 +37,7 @@ BVPCoreData::BVPCoreData(BVPCoreData&& other) noexcept
     fe_mesh             = std::move(other.fe_mesh);
     dof_manager         = std::move(other.dof_manager);
     boundary_conditions = std::move(other.boundary_conditions);
-    gl_solution         = std::move(other.gl_solution);
-    if (gl_solution != nullptr)
-    {
-        gl_solution->update_dof_refs(create_dof_refs(dof_manager));
-    }
+    solution            = std::move(other.solution);
     enrichment_surfaces_data = std::move(other.enrichment_surfaces_data);
 }
 
@@ -227,7 +224,7 @@ void save_bvp_data_json(const BVPData& bvp_data, const std::string filestem)
 
 sparse_linear_algebra::DofMapRefs create_dof_refs(const dof_manager::DofManager& dof_manager)
 {
-    auto& dof_maps        = dof_manager.get_dof_maps();
+    auto& dof_maps = dof_manager.get_dof_maps();
     return { dof_maps.n_owned_dofs,           dof_maps.n_local_ghost_dofs,
              dof_maps.n_exclusive_ghost_dofs, dof_maps.owned_global_dof_begin,
              dof_maps.owned_global_dof_end,   dof_maps.n_owned_elements,
