@@ -116,6 +116,8 @@ BVPData load_bvp_data(const std::string filestem, int rank_to_load)
                  "The rank to load was larger than the number of ranks that wrote the data file.");
 
     std::ifstream bin_in(binary_path, std::ios::in | std::ios::binary);
+    bin_in.seekg(offset_info.offsets[rank_to_load]);
+
     utility::InputDeserializer s(bin_in);
 
     BVPData bvp_data;

@@ -156,8 +156,27 @@ SolveTimeStepResult LinearElasticBVP::solve_next_time_step(BVPData& bvp_data) co
     _F_BEGIN2("linear algebra solve");
 
     // TODO make the solver automatically update the ghost values of the solution
-    lin_alg.sparse_solver->solve(&gl_stiffness, &gl_rhs, &gl_displacement);
+    auto solver_status = lin_alg.sparse_solver->solve(&gl_stiffness, &gl_rhs, &gl_displacement);
     gl_displacement.update_local_array(bvp_data.solution());
+
+    // Update solver status file
+    std::ofstream solver_log(bvp_data.output_dir() / "solver_log.yml");
+    solver_log << "solve:" << std::endl;
+    solver_log << "   time_step: 0" << std::endl;
+    solver_log << "   iteration: 0" << std::endl;
+    for (auto& key_value : solver_status.string_stats)
+    {
+        solver_log << "   " << key_value.first << ": " << key_value.second << std::endl;
+    }
+    for (auto& key_value : solver_status.integral_stats)
+    {
+        solver_log << "   " << key_value.first << ": " << key_value.second << std::endl;
+    }
+    for (auto& key_value : solver_status.float_stats)
+    {
+        solver_log << "   " << key_value.first << ": " << key_value.second << std::endl;
+    }
+    solver_log.close();
 
     _F_END();
 
