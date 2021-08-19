@@ -7,6 +7,7 @@
 #include "fea_io/meta/MetaWriter.h"
 #include "finite_element/ModelSelectionHelper.h"
 #include "mesh/algorithms/IO.h"
+#include "utility/MPIUtils.h"
 #include "utility/Profile.h"
 #include "utility/serialization/Serialization.h"
 
@@ -208,7 +209,7 @@ void BoundaryValueProblem::set_field_models(
 
 void BoundaryValueProblem::solve_time_steps(BVPData& bvp_data) const
 {
-    _F_BEGIN();
+    _F_BEGIN2(bvp_data.bvp_name());
 
     init_all_data(bvp_data);
 
@@ -223,6 +224,13 @@ void BoundaryValueProblem::solve_time_steps(BVPData& bvp_data) const
             _UTIL_WARN_C("Time step failed to converge, exiting solve_time_steps");
             break;
         }
+    }
+
+    if (sparse_linear_algebra::LinAlgFactory::get().verbose_level() >=
+        sparse_linear_algebra::VerboseLevel::BASIC)
+    {
+        sparse_linear_algebra::LinAlgFactory::get().write_log(
+          (bvp_data.output_dir() / "lin_alg_log.txt").generic_string());
     }
 
     _F_END();

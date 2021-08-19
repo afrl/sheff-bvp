@@ -48,29 +48,34 @@ LinearElasticLinearAlgebra::constraint_matrices() const
 
 void LinearElasticBVP::init_lin_algebra(BVPData& bvp_data) const
 {
+    _F_BEGIN2("allocate global vectors/matrices");
+
     auto dof_refs = create_dof_refs(bvp_data.dof_manager());
 
     bvp_data.gl_lin_alg = std::make_unique<LinearElasticLinearAlgebra>();
     auto& lin_alg       = static_cast<LinearElasticLinearAlgebra&>(*bvp_data.gl_lin_alg);
 
     // Right now, penalty is all that works.  Switch this to in-place elimination when that works.
-    lin_alg.constraint_matrix = sparse_linear_algebra::LinAlgFactory::create_constraint_matrix(
-      dof_refs,
-      bvp_data.core_data.solver_opts.constraint_method);
+    lin_alg.constraint_matrix =
+      sparse_linear_algebra::LinAlgFactory::get().create_constraint_matrix(
+        dof_refs,
+        bvp_data.core_data.solver_opts.constraint_method);
 
-    lin_alg.stiffness = sparse_linear_algebra::LinAlgFactory::create_matrix(dof_refs);
+    lin_alg.stiffness = sparse_linear_algebra::LinAlgFactory::get().create_matrix(dof_refs);
     lin_alg.stiffness->set_constraint_matrix(lin_alg.constraint_matrix.get());
     lin_alg.stiffness->allocate();
 
-    lin_alg.solution = sparse_linear_algebra::LinAlgFactory::create_vector(dof_refs);
+    lin_alg.solution = sparse_linear_algebra::LinAlgFactory::get().create_vector(dof_refs);
     lin_alg.solution->allocate();
-    lin_alg.eigenstrain_force = sparse_linear_algebra::LinAlgFactory::create_vector(dof_refs);
+    lin_alg.eigenstrain_force = sparse_linear_algebra::LinAlgFactory::get().create_vector(dof_refs);
     lin_alg.eigenstrain_force->allocate();
-    lin_alg.rhs = sparse_linear_algebra::LinAlgFactory::create_vector(dof_refs);
+    lin_alg.rhs = sparse_linear_algebra::LinAlgFactory::get().create_vector(dof_refs);
     lin_alg.rhs->allocate();
 
     lin_alg.sparse_solver =
-      sparse_linear_algebra::LinAlgFactory::create_solver(bvp_data.core_data.solver_opts);
+      sparse_linear_algebra::LinAlgFactory::get().create_solver(bvp_data.core_data.solver_opts);
+
+    _F_END();
 }
 
 void LinearElasticBVP::apply_boundary_conditions(BVPData& bvp_data) const
@@ -93,7 +98,7 @@ void LinearElasticBVP::apply_boundary_conditions(BVPData& bvp_data) const
 
 SolveTimeStepResult LinearElasticBVP::solve_next_time_step(BVPData& bvp_data) const
 {
-    _F_BEGIN();
+    _F_BEGIN2(bvp_data.bvp_name());
 
     init_all_data(bvp_data);
 
@@ -106,6 +111,9 @@ SolveTimeStepResult LinearElasticBVP::solve_next_time_step(BVPData& bvp_data) co
     {
         fs::create_directory(ts_dir);
     }
+
+    auto log_stage_name = bvp_data.bvp_name() + "_ts" + std::to_string(curr_time_step);
+    sparse_linear_algebra::LinAlgFactory::get().start_log_stage(log_stage_name);
 
     _F_BEGIN2("apply BC's");
 
@@ -179,6 +187,8 @@ SolveTimeStepResult LinearElasticBVP::solve_next_time_step(BVPData& bvp_data) co
     solver_log.close();
 
     _F_END();
+
+    sparse_linear_algebra::LinAlgFactory::get().end_current_log_stage();
 
     if (BVPGlobalOptions::get().save_global_matrices)
     {

@@ -14,6 +14,7 @@ namespace bvp
 /// @brief Data that must be saved in a restart file
 struct BVPCoreData
 {
+    std::string bvp_name;
     fs::path output_dir;
     TimeDiscretizationData time_discr_data;
     sparse_linear_algebra::SparseSolverOptions solver_opts;
@@ -72,7 +73,22 @@ struct BVPData
     //////////////////////////////////////////////////////////////////////////////////////////////
     // Short-hand accessors to ease navigating the structs
 
+    inline auto& bvp_name()
+    {
+        return core_data.bvp_name;
+    }
+
+    inline auto& bvp_name() const
+    {
+        return core_data.bvp_name;
+    }
+
     inline auto& output_dir()
+    {
+        return core_data.output_dir;
+    }
+    
+    inline auto& output_dir() const
     {
         return core_data.output_dir;
     }

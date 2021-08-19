@@ -12,7 +12,8 @@ namespace utility
 template<typename SerializerType>
 void serialize(SerializerType& s, const bvp::BVPData& bvp_data)
 {
-    s(utility::named_value("output_dir", bvp_data.core_data.output_dir.generic_string()),
+    s(utility::named_value("bvp_name", bvp_data.core_data.bvp_name),
+      utility::named_value("output_dir", bvp_data.core_data.output_dir.generic_string()),
       utility::named_ref("time_discr_data", bvp_data.core_data.time_discr_data),
       utility::named_ref("solver_opts", bvp_data.core_data.solver_opts),
       utility::named_ref("fe_mesh", bvp_data.core_data.fe_mesh),
@@ -41,7 +42,8 @@ template<typename SerializerType>
 void deserialize(SerializerType& s, bvp::BVPData& bvp_data)
 {
     std::string output_dir_str;
-    s(output_dir_str,
+    s(bvp_data.core_data.bvp_name,
+      output_dir_str,
       bvp_data.core_data.time_discr_data,
       bvp_data.core_data.solver_opts,
       bvp_data.core_data.fe_mesh,
