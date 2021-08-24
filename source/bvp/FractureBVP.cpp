@@ -44,7 +44,7 @@ void FractureBVP::insert_precracks(BVPData& bvp_data,
             throw _UTIL_MSG_EXCEPT("No element was found that contains the point " +
                                    simple_math::to_string(initation.initiation_point));
         }
-        auto& initation_fe = bvp_data.fe_mesh().get_finite_element(find_result.second);
+        auto initation_fe = bvp_data.fe_mesh().get_finite_element(find_result.second);
 
         auto& direction_criteria             = initation.direction_criterion;
         simple_math::VoigtVector zero_stress = simple_math::VoigtVector::Zero(6);

@@ -266,7 +266,7 @@ void BoundaryValueProblem::init_core_data(BVPData& bvp_data) const
     }
 
     // Note: allocate_isvs will only allocate if the field does not already have ISV's allocated.
-    for (auto& fe_accessor : bvp_data.fe_mesh().finite_elements())
+    for (auto fe_accessor : bvp_data.fe_mesh().finite_elements())
     {
         finite_element::FiniteElement::allocate_isvs(fe_accessor.layout);
     }
