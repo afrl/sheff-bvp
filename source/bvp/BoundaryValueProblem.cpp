@@ -251,7 +251,9 @@ void BoundaryValueProblem::init_core_data(BVPData& bvp_data) const
         }
         if (!bvp_data.element_scatter_map().initialized())
         {
-            bvp_data.element_scatter_map().update(bvp_data.fe_mesh(), bvp_data.adjacency_list());
+            dof_manager::update_element_scatter_map(bvp_data.fe_mesh(),
+                                                    bvp_data.adjacency_list(),
+                                                    bvp_data.element_scatter_map());
         }
 
         bvp_data.dof_manager().enumerate(bvp_data.fe_mesh(),
@@ -287,7 +289,9 @@ void BoundaryValueProblem::init_all_data(BVPData& bvp_data) const
     }
     if (!bvp_data.element_scatter_map().initialized())
     {
-        bvp_data.element_scatter_map().update(bvp_data.fe_mesh(), bvp_data.adjacency_list());
+        dof_manager::update_element_scatter_map(bvp_data.fe_mesh(),
+                                                bvp_data.adjacency_list(),
+                                                bvp_data.element_scatter_map());
     }
     if (!bvp_data.secondary_data.assembler_ptr)
     {
