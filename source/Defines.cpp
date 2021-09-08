@@ -6,6 +6,7 @@
 
 namespace bvp
 {
+/*
 void init(const std::string preferred_lin_alg_backend, int* argc, char*** argv)
 {
     utility::MPIUtils::init(argc, argv);
@@ -15,4 +16,5 @@ void init(const std::string preferred_lin_alg_backend, int* argc, char*** argv)
       sparse_linear_algebra::LinAlgFactory::get().backend_from_str(preferred_lin_alg_backend);
     sparse_linear_algebra::LinAlgFactory::get().init(backend, argc, argv);
 }
+*/
 }
