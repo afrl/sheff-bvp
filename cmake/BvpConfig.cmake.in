@@ -1,22 +1,22 @@
 # Make sure we have public dependencies available
-find_package(Utility CONFIG REQUIRED HINTS 
-  "${CMAKE_SOURCE_DIR}/../utility/install_dir" "${CMAKE_SOURCE_DIR}/../../utility/install_dir" "${CMAKE_SOURCE_DIR}/modules/utility/install_dir")
-find_package(SimpleMath CONFIG REQUIRED HINTS 
-  "${CMAKE_SOURCE_DIR}/../simple_math/install_dir" "${CMAKE_SOURCE_DIR}/../../simple_math/install_dir" "${CMAKE_SOURCE_DIR}/modules/simple_math/install_dir")
-find_package(Constitutive CONFIG REQUIRED HINTS 
-  "${CMAKE_SOURCE_DIR}/../constitutive/install_dir" "${CMAKE_SOURCE_DIR}/../../constitutive/install_dir" "${CMAKE_SOURCE_DIR}/modules/constitutive/install_dir")
-find_package(FeaIo CONFIG REQUIRED HINTS 
-  "${CMAKE_SOURCE_DIR}/../fea_io/install_dir" "${CMAKE_SOURCE_DIR}/../../fea_io/install_dir" "${CMAKE_SOURCE_DIR}/modules/fea_io/install_dir")
-find_package(FiniteElement CONFIG REQUIRED HINTS 
-  "${CMAKE_SOURCE_DIR}/../finite_element/install_dir" "${CMAKE_SOURCE_DIR}/../../finite_element/install_dir" "${CMAKE_SOURCE_DIR}/modules/finite_element/install_dir")
-find_package(SparseLinearAlgebra CONFIG REQUIRED HINTS 
-  "${CMAKE_SOURCE_DIR}/../sparse_linear_algebra/install_dir" "${CMAKE_SOURCE_DIR}/../../sparse_linear_algebra/install_dir" "${CMAKE_SOURCE_DIR}/modules/sparse_linear_algebra/install_dir")
-find_package(DofManager CONFIG REQUIRED HINTS 
-  "${CMAKE_SOURCE_DIR}/../dof_manager/install_dir" "${CMAKE_SOURCE_DIR}/../../dof_manager/install_dir" "${CMAKE_SOURCE_DIR}/modules/dof_manager/install_dir")
-find_package(Assembler CONFIG REQUIRED HINTS 
-  "${CMAKE_SOURCE_DIR}/../assembler/install_dir" "${CMAKE_SOURCE_DIR}/../../assembler/install_dir" "${CMAKE_SOURCE_DIR}/modules/assembler/install_dir")
-find_package(Xfem CONFIG REQUIRED HINTS 
-  "${CMAKE_SOURCE_DIR}/../xfem/install_dir" "${CMAKE_SOURCE_DIR}/../../xfem/install_dir" "${CMAKE_SOURCE_DIR}/modules/xfem/install_dir")
+find_package(Utility CONFIG REQUIRED NO_CMAKE_SYSTEM_PACKAGE_REGISTRY HINTS 
+  "${CMAKE_SOURCE_DIR}/../../first_party/utility/build")
+find_package(SimpleMath CONFIG REQUIRED NO_CMAKE_SYSTEM_PACKAGE_REGISTRY HINTS 
+  "${CMAKE_SOURCE_DIR}/../../first_party/simple_math/build")
+find_package(Constitutive CONFIG REQUIRED NO_CMAKE_SYSTEM_PACKAGE_REGISTRY HINTS 
+  "${CMAKE_SOURCE_DIR}/../../first_party/constitutive/build")
+find_package(FeaIo CONFIG REQUIRED NO_CMAKE_SYSTEM_PACKAGE_REGISTRY HINTS 
+  "${CMAKE_SOURCE_DIR}/../../first_party/fea_io/build")
+find_package(FiniteElement CONFIG REQUIRED NO_CMAKE_SYSTEM_PACKAGE_REGISTRY HINTS 
+  "${CMAKE_SOURCE_DIR}/../../first_party/finite_element/build")
+find_package(SparseLinearAlgebra CONFIG REQUIRED NO_CMAKE_SYSTEM_PACKAGE_REGISTRY HINTS 
+  "${CMAKE_SOURCE_DIR}/../../first_party/sparse_linear_algebra/build")
+find_package(DofManager CONFIG REQUIRED NO_CMAKE_SYSTEM_PACKAGE_REGISTRY HINTS 
+  "${CMAKE_SOURCE_DIR}/../../first_party/dof_manager/build")
+find_package(Assembler CONFIG REQUIRED NO_CMAKE_SYSTEM_PACKAGE_REGISTRY HINTS 
+  "${CMAKE_SOURCE_DIR}/../../first_party/assembler/build")
+find_package(Xfem CONFIG REQUIRED NO_CMAKE_SYSTEM_PACKAGE_REGISTRY HINTS 
+  "${CMAKE_SOURCE_DIR}/../../first_party/xfem/build")
 
 
 if(NOT TARGET Bvp::Bvp)

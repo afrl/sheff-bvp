@@ -25,12 +25,14 @@ include(${PROJECT_SOURCE_DIR}/cmake/CommonInputChecks.cmake)
 
 if(NOT TARGET Assembler::Assembler)
   message(STATUS "Assembler did not already exist, finding package.")
-  find_package(Assembler CONFIG REQUIRED HINTS "${PROJECT_SOURCE_DIR}/../../first_party/assembler/build")
+  find_package(Assembler CONFIG REQUIRED NO_CMAKE_SYSTEM_PACKAGE_REGISTRY HINTS
+               "${PROJECT_SOURCE_DIR}/../../first_party/assembler/build")
 endif()
 
 if(NOT TARGET Xfem::Xfem)
   message(STATUS "Xfem did not already exist, finding package.")
-  find_package(Xfem CONFIG REQUIRED HINTS "${PROJECT_SOURCE_DIR}/../../first_party/xfem/build")
+  find_package(Xfem CONFIG REQUIRED NO_CMAKE_SYSTEM_PACKAGE_REGISTRY HINTS
+               "${PROJECT_SOURCE_DIR}/../../first_party/xfem/build")
 endif()
 
 ################################
