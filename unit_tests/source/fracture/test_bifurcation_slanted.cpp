@@ -5,6 +5,7 @@
 #include "constitutive/enrichment/growth_criteria/PositionFunctionGrowthCriterion.h"
 #include "constitutive/field/deformation/linear_elasticity/LinearElasticProperties.h"
 #include "mesh/algorithms/Creation.h"
+#include "xfem/misc/XFEMGlobalOptions.h"
 
 using namespace bvp;
 
@@ -12,13 +13,14 @@ int main(int argc, char** argv)
 {
     fea_io::MPIUtils::init(&argc, &argv);
     utility::MPIUtils::init(&argc, &argv);
-    sparse_linear_algebra::LinAlgFactory::init(
+    sparse_linear_algebra::LinAlgFactory::get().init(
       sparse_linear_algebra::LinAlgFactory::LinAlgBackend::AUTO,
-      &argc,
-      &argv);
+      {});
 
     //////////////////////////////////////////////////////////////////////////////////////////////
     // Properties
+
+    xfem::XFEMGlobalOptions::get().element_local_level_set_C0_weight = 1000;
 
     const double E  = 1e9;
     const double nu = 0.3;
@@ -33,7 +35,8 @@ int main(int argc, char** argv)
     auto crack_0_dir_crit = constitutive::add_direction_criterion(
       "crack_0_dir_crit",
       constitutive::PositionFunctionDirectionCriterion(
-        [](const int& crack_index, const simple_math::Point& p) -> simple_math::Vector3D {
+        [](const int& crack_index, const simple_math::Point& p) -> simple_math::Vector3D
+        {
             if (p[1] <= 5)
             {
                 return simple_math::Vector3D(0, 0, 1);
@@ -51,7 +54,8 @@ int main(int argc, char** argv)
     auto crack_1_dir_crit = constitutive::add_direction_criterion(
       "crack_1_dir_crit",
       constitutive::PositionFunctionDirectionCriterion(
-        [](const int& crack_index, const simple_math::Point& p) -> simple_math::Vector3D {
+        [](const int& crack_index, const simple_math::Point& p) -> simple_math::Vector3D
+        {
             if (p[1] >= 5)
             {
                 return simple_math::Vector3D(1, 0, 0);
@@ -73,7 +77,8 @@ int main(int argc, char** argv)
     auto growth_crit = constitutive::add_growth_criterion(
       "growth_crit",
       constitutive::PositionFunctionGrowthCriterion(
-        [&phase](const int& crack_index, const simple_math::Point& p) -> bool {
+        [&phase](const int& crack_index, const simple_math::Point& p) -> bool
+        {
             switch (phase)
             {
                 case 0: return (p[1] < 4 && crack_index == 0) || (p[1] > 6 && crack_index == 1);
@@ -88,7 +93,7 @@ int main(int argc, char** argv)
 
     auto bvp = FractureBVP::get();
     BVPData bvp_data;
-    bvp.set_input(mesh::make_linear_grid({ 0, 1, 2, 3 }, { 0, 1, 2 }, { 0, 1, 2, 3 }),
+    bvp.set_input(mesh::make_uniform_linear_grid({ 0, 0, 0 }, { 10, 10, 10 }, { 10, 10, 10 }),
                   get_test_name(__FILE__),
                   (get_output_directory(__FILE__) / "output").string(),
                   bvp_data);
@@ -110,9 +115,12 @@ int main(int argc, char** argv)
 
     // Let the cracks grow past each other
     phase = 1;
-    bvp.try_to_grow_precracks(bvp_data);
+    while (bvp.try_to_grow_precracks(bvp_data)) {}
+
+    phase = 2;
+    while (bvp.try_to_grow_precracks(bvp_data)) {}
 
     bvp.solve_time_steps(bvp_data);
 
-	return 0;
+    return 0;
 }

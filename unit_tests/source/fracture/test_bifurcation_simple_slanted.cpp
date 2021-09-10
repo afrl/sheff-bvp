@@ -105,7 +105,7 @@ int main(int argc, char** argv)
 
     // Let the cracks grow past each other
     phase = 1;
-    bvp.try_to_grow_precracks(bvp_data);
+    while (bvp.try_to_grow_precracks(bvp_data)) {}
     phase = 2;
     bvp.try_to_grow_precracks(bvp_data);
 

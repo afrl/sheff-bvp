@@ -200,7 +200,8 @@ void FractureBVP::insert_precracks_by_function_outside_previous(
           insertion.level_set_function,
           [&insertions, &i](const finite_element::FiniteElementConstAccessor& curr_fe,
                             const finite_element::LeafIndex& leaf_index,
-                            const simple_math::Point& p) -> bool {
+                            const simple_math::Point& p) -> bool
+          {
               // If the element is not enriched, then ensure it on the side of all of the level-sets
               if (curr_fe.layout.get_n_enrichments() == 0)
               {
@@ -248,7 +249,8 @@ void FractureBVP::insert_precracks_by_function_with_boolean(
     // TODO
     auto& f1                    = insertions[0].level_set_function;
     auto& f2                    = insertions[1].level_set_function;
-    LevelSetFunction f1_wrapped = [&f1, &f2](const simple_math::Point& p) -> const double {
+    LevelSetFunction f1_wrapped = [&f1, &f2](const simple_math::Point& p) -> const double
+    {
         const double f2_val = f2(p);
         if (f2_val > 0)
         {
@@ -297,7 +299,8 @@ void FractureBVP::insert_precracks_by_function_with_boolean(
     // Insert surface for f2
     {
         // Why do I have to flipped the second condition?  Get to the bottom of this.
-        LevelSetFunction f1_wrapped2 = [&f1, &f2](const simple_math::Point& p) -> const double {
+        LevelSetFunction f1_wrapped2 = [&f1, &f2](const simple_math::Point& p) -> const double
+        {
             const double f2_val = f2(p);
             if (f2_val > 0)
             {
@@ -316,7 +319,8 @@ void FractureBVP::insert_precracks_by_function_with_boolean(
           f2,
           [f1, f1_wrapped](const finite_element::FiniteElementConstAccessor& curr_fe,
                            const finite_element::LeafIndex& leaf_index,
-                           const simple_math::Point& p) -> const bool {
+                           const simple_math::Point& p) -> const bool
+          {
               const double f1_val         = f1(p);
               const double f1_wrapped_val = f1_wrapped(p);
               if (f1_val > 0)
@@ -340,14 +344,16 @@ void FractureBVP::insert_precracks_by_function_with_boolean(
     }
 }
 
-void FractureBVP::try_to_grow_precracks(BVPData& bvp_data) const
+bool FractureBVP::try_to_grow_precracks(BVPData& bvp_data) const
 {
+    static int growth_step = 2;
+
     auto e_workspace               = std::make_unique<finite_element::ElementWorkspace>();
     auto& enrichment_surfaces_data = bvp_data.enrichment_surfaces_data();
     auto xfem_param                = get_xfem_params(bvp_data);
 
     // Grow all the cracks one element until they can no longer grow
-    int growth_step = 1;
+    bool new_growth_occurred = false;
     for (auto& surface_data : enrichment_surfaces_data)
     {
         if (!surface_data.enrichments_at_front.empty())
@@ -378,20 +384,26 @@ void FractureBVP::try_to_grow_precracks(BVPData& bvp_data) const
             {
                 auto search_results = xfem::search_ahead_of_front(surface_data, xfem_param, index);
 
-                auto new_growth_occurred = xfem::grow_surface_front_into_all_leaves(surface_data,
-                                                                                    xfem_param,
-                                                                                    index,
-                                                                                    search_results,
-                                                                                    *e_workspace);
+                new_growth_occurred |= xfem::grow_surface_front_into_all_leaves(surface_data,
+                                                                                xfem_param,
+                                                                                index,
+                                                                                search_results,
+                                                                                *e_workspace);
             }
-
-            growth_step++;
         }
     }
+
+    xfem::write_level_sets_to_vtk(enrichment_surfaces_data,
+                                  xfem_param,
+                                  "./",
+                                  growth_step++, // step #
+                                  0);          // substep #
+
 
     // xfem::write_json_enrichment_info("./enrichments.json",
     //                                      mesh_->elements(),
     //                                      dof_manager_.get_dof_maps());
+    return new_growth_occurred;
 }
 
 SolveTimeStepResult FractureBVP::solve_next_time_step(BVPData& bvp_data) const
@@ -488,8 +500,9 @@ xfem::Params FractureBVP::get_xfem_params(BVPData& bvp_data) const
     const auto& solution = bvp_data.solution();
     const auto& dof_map  = bvp_data.dof_manager().get_dof_maps();
     xfem::GetElementSolutionCallback get_element_solution_cb =
-      [&solution, &dof_map](const finite_element::FiniteElementConstAccessor& fe_accessor)
-      -> simple_math::GeneralVector {
+      [&solution, &dof_map](
+        const finite_element::FiniteElementConstAccessor& fe_accessor) -> simple_math::GeneralVector
+    {
         return assembler::extract_element_solution_vector(solution,
                                                           dof_map,
                                                           fe_accessor.element.local_index());
