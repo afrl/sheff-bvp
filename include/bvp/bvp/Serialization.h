@@ -26,7 +26,7 @@ void serialize(SerializerType& s, const bvp::BVPData& bvp_data)
     // faults if something goes wrong.
     assert(bvp_data.core_data.dof_manager.get_dof_maps().n_dofs_on_rank() ==
            bvp_data.core_data.solution.size());
-    s(utility::named_value("solution", utility::slice(bvp_data.core_data.solution)));
+    s(utility::named_value("solution", utility::slice_c(bvp_data.core_data.solution)));
     s(utility::named_value("n_enrichment_surfaces",
                            bvp_data.core_data.enrichment_surfaces_data.size()),
       utility::named_value("enrichment_surfaces_data",
