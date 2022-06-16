@@ -1,8 +1,8 @@
 #include "../UnitTestHelpers.h"
-#include "constitutive/field/deformation/linear_elasticity/LinearElasticProperties.h"
 #include "bvp/bvp/LinearElasticBVP.h"
-#include "mesh/algorithms/UnitElements.h"
+#include "constitutive/field/deformation/linear_elasticity/LinearElasticProperties.h"
 #include "mesh/algorithms/Creation.h"
+#include "mesh/algorithms/UnitElements.h"
 
 using namespace bvp;
 
@@ -10,10 +10,9 @@ int main(int argc, char** argv)
 {
     fea_io::MPIUtils::init(&argc, &argv);
     utility::MPIUtils::init(&argc, &argv);
-    sparse_linear_algebra::LinAlgFactory::init(
+    sparse_linear_algebra::LinAlgFactory::get().init(
       sparse_linear_algebra::LinAlgFactory::LinAlgBackend::AUTO,
-      &argc,
-      &argv);
+      {});
 
     const double E  = 1e9;
     const double nu = 0.3;
@@ -50,7 +49,9 @@ int main(int argc, char** argv)
         {
             // Provide the current solution in case the element requries it.
             elem_solution_vector =
-              bvp_data.solution().get_element_part(fe_accessor.element.local_index());
+              assembler::extract_element_solution_vector(bvp_data.solution(),
+                                                         bvp_data.dof_manager().get_dof_maps(),
+                                                         fe_accessor.element.local_index());
 
             auto params = finite_element::FiniteElement::make_params(fe_accessor.element,
                                                                      elem_solution_vector,

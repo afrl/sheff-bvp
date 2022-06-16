@@ -84,10 +84,9 @@ int main(int argc, char** argv)
 {
     fea_io::MPIUtils::init(&argc, &argv);
     utility::MPIUtils::init(&argc, &argv);
-    sparse_linear_algebra::LinAlgFactory::init(
+    sparse_linear_algebra::LinAlgFactory::get().init(
       sparse_linear_algebra::LinAlgFactory::LinAlgBackend::PETSC,
-      &argc,
-      &argv);
+      {});
 
     bvp::BVPGlobalOptions::get().save_global_matrices = true;
 
@@ -376,8 +375,7 @@ int main(int argc, char** argv)
             auto bvp = FractureBVP::get();
             BVPData bvp_data;
             auto& solver_opts                    = bvp_data.core_data.solver_opts;
-            solver_opts.verbose_level            = sparse_linear_algebra::VerboseLevel::None;
-            solver_opts.preffered_preconditioner = solver.first;
+            solver_opts.preferred_preconditioner = solver.first;
             solver_opts.preferred_solver         = solver.second;
             solver_opts.max_iterations           = 200;
             solver_opts.relative_tol             = 1e-18;
@@ -415,7 +413,7 @@ int main(int argc, char** argv)
 
                 auto stop = std::chrono::high_resolution_clock::now();
 
-                auto solution = bvp_data.solution().get_as_eigen_vector();
+                auto solution = simple_math::as_eigen_vector(bvp_data.solution());
 
                 out << solver_status.string_stats["ksp_type"] << ","
                     << solver_status.string_stats["pc_type"] << ","

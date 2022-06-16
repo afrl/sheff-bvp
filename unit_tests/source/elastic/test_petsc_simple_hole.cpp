@@ -12,8 +12,9 @@ int main(int argc, char ** argv)
 {
     fea_io::MPIUtils::init(&argc, &argv);
     utility::MPIUtils::init(&argc, &argv);
-    sparse_linear_algebra::LinAlgFactory::init(
-        sparse_linear_algebra::LinAlgFactory::LinAlgBackend::PETSC, &argc, &argv);
+    sparse_linear_algebra::LinAlgFactory::get().init(
+      sparse_linear_algebra::LinAlgFactory::LinAlgBackend::PETSC,
+      {});
 
     auto n_ranks = utility::MPIUtils::get_num_local_ranks();
     utility::MPIUtils::print_process_ids();

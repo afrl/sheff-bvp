@@ -11,10 +11,9 @@ int main(int argc, char** argv)
 {
     fea_io::MPIUtils::init(&argc, &argv);
     utility::MPIUtils::init(&argc, &argv);
-    sparse_linear_algebra::LinAlgFactory::init(
+    sparse_linear_algebra::LinAlgFactory::get().init(
       sparse_linear_algebra::LinAlgFactory::LinAlgBackend::AUTO,
-      &argc,
-      &argv);
+      {});
 
     //////////////////////////////////////////////////////////////////////////////////////////////
     // Debugging Global Options

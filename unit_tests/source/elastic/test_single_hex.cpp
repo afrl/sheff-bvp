@@ -9,10 +9,9 @@ int main(int argc, char** argv)
 {
     fea_io::MPIUtils::init(&argc, &argv);
     utility::MPIUtils::init(&argc, &argv);
-    sparse_linear_algebra::LinAlgFactory::init(
+    sparse_linear_algebra::LinAlgFactory::get().init(
       sparse_linear_algebra::LinAlgFactory::LinAlgBackend::AUTO,
-      &argc,
-      &argv);
+      {});
 
     const double E  = 1e9;
     const double nu = 0.3;

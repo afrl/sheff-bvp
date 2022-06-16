@@ -10,10 +10,9 @@ int main(int argc, char** argv)
 {
     fea_io::MPIUtils::init(&argc, &argv);
     utility::MPIUtils::init(&argc, &argv);
-    sparse_linear_algebra::LinAlgFactory::init(
+    sparse_linear_algebra::LinAlgFactory::get().init(
       sparse_linear_algebra::LinAlgFactory::LinAlgBackend::AUTO,
-      &argc,
-      &argv);
+      {});
 
     const double E  = 1e9;
     const double nu = 0.3;
@@ -49,7 +48,7 @@ int main(int argc, char** argv)
         }
         assert(fabs(force_sum - 4 * 1e6) < (4 * 1e6 * 1e-8));
 
-        auto solution = bvp_data.solution().get_as_eigen_vector();
+        auto solution = simple_math::as_eigen_vector(bvp_data.solution());
         for (auto i : bvp_data.mesh().nodes().group("pos_x").node_indices)
         {
             assert(fabs(solution(3 * i) - 2e-3) < 1e-8);
@@ -82,7 +81,7 @@ int main(int argc, char** argv)
         }
         assert(fabs(force_sum - 4 * 1e6) < (4 * 1e6 * 1e-8));
 
-        auto solution = bvp_data.solution().get_as_eigen_vector();
+        auto solution = simple_math::as_eigen_vector(bvp_data.solution());
         for (auto i : bvp_data.mesh().nodes().group("pos_x").node_indices)
         {
             assert(fabs(solution(3 * i) - 2e-3) < 1e-8);
