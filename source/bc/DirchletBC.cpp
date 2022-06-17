@@ -10,6 +10,8 @@ void DirichletBC::initialize(const finite_element::FiniteElementMesh& fe_mesh,
                              const mesh::NodeToElementMap& node_to_element_map,
                              const dof_manager::DofMap& dof_map,
                              const dof_manager::RankDofIndex& n_components_for_field,
+                             const double& scale_factor,
+                             const bool& is_incremental,
                              sparse_linear_algebra::ConstraintMatrix& constraint_matrix)
 {
     std::set<dof_manager::RankDofIndex> dofs_to_constrain;
@@ -87,10 +89,16 @@ void DirichletBC::initialize(const finite_element::FiniteElementMesh& fe_mesh,
         }
     }
 
+    double constraint_value = scale_factor * opts_.value;
+    if (is_incremental)
+    {
+        constraint_value = 0.0;
+    }
+
     for (auto rank_dof : dofs_to_constrain)
     {
         const auto& global_dof = rank_to_global_map[rank_dof];
-        constraint_matrix.add_dirichlet_constraint(global_dof, opts_.value);
+        constraint_matrix.add_dirichlet_constraint(global_dof, constraint_value);
     }
 }
 }

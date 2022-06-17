@@ -92,6 +92,8 @@ void LinearElasticBVP::apply_boundary_conditions(BVPData& bvp_data) const
                        bvp_data.node_to_element_map(),
                        bvp_data.dof_manager().get_dof_maps(),
                        utility::GlobalVariables::get_dimensionality(),
+                       1.0,
+                       false,
                        *lin_alg.constraint_matrix);
     }
 }

@@ -9,6 +9,8 @@ void TractionBC::initialize(const finite_element::FiniteElementMesh& fe_mesh,
                             const mesh::NodeToElementMap& node_to_element_map,
                             const dof_manager::DofMap& dof_map,
                             const dof_manager::RankDofIndex& n_components_for_field,
+                            const double& scale_factor,
+                            const bool& is_incremental,
                             sparse_linear_algebra::ConstraintMatrix& constraint_matrix)
 {
     std::set<dof_manager::RankDofIndex> dofs_to_constrain;
@@ -57,8 +59,11 @@ void TractionBC::initialize(const finite_element::FiniteElementMesh& fe_mesh,
 
     for (auto& dof_force_term_to_add : dof_force_terms_to_add)
     {
+
+        double force_value = scale_factor * dof_force_term_to_add.second;
+
         const auto& global_dof = rank_to_global_map[dof_force_term_to_add.first];
-        constraint_matrix.add_neumann_term(global_dof, dof_force_term_to_add.second);
+        constraint_matrix.add_neumann_term(global_dof, force_value);
     }
 }
 }

@@ -25,6 +25,8 @@ class BoundaryCondition
                             const mesh::NodeToElementMap& node_to_element_map,
                             const dof_manager::DofMap& dof_map,
                             const dof_manager::RankDofIndex& n_components_for_field,
+                            const double& scale_factor,
+                            const bool& is_incremental,
                             sparse_linear_algebra::ConstraintMatrix& constraint_matrix) = 0;
 };
 }
