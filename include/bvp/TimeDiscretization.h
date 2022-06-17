@@ -14,7 +14,7 @@ enum class TimeDiscretizationType
 struct TimeDiscretizationData
 {
     int last_converged_time_step = -1;
-    double last_convered_time    = 0.0;
+    double last_converged_time    = 0.0;
     TimeDiscretizationType type  = TimeDiscretizationType::STATIC;
 
     //////////////////////////////////////////////////////////////////////////////////////////////

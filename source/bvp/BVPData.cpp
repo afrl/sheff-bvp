@@ -34,6 +34,8 @@ BVPCoreData::BVPCoreData(BVPCoreData&& other) noexcept
 {
     output_dir          = std::move(other.output_dir);
     time_discr_data     = std::move(other.time_discr_data);
+    load_steps          = std::move(other.load_steps);
+    load_steps_init     = std::move(other.load_steps_init);
     fe_mesh             = std::move(other.fe_mesh);
     dof_manager         = std::move(other.dof_manager);
     boundary_conditions = std::move(other.boundary_conditions);

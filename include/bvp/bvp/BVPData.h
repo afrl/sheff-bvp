@@ -17,6 +17,10 @@ struct BVPCoreData
     std::string bvp_name;
     fs::path output_dir;
     TimeDiscretizationData time_discr_data;
+    /// this vector can change if we add additional steps for convergence
+    std::vector<double> load_steps;
+    std::vector<double> load_steps_init;
+    /// this vector is given
     sparse_linear_algebra::SparseSolverOptions solver_opts;
 
     finite_element::FiniteElementMesh fe_mesh;
