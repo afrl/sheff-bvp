@@ -68,27 +68,44 @@ class MateriallyNonlinearBVP : public BoundaryValueProblem
     virtual void apply_boundary_conditions(BVPData& bvp_data) const override;
 };
 
-/// A load step manager class
-    class NonlinearStaticLoadStepManager 
-    {
-    public:
-        /// Constructor
-        /// load steps and max_iterations - from input ???
-        ///
-        NonlinearStaticLoadStepManager(int max_iterations, float reduction_coeff) : max_iterations(max_iterations), reduction(reduction_coeff) 
-                                                                    
-         /// starts load step loop
-        virtual void start_load_step_loop();
-        /// returns next load step
-        virtual next_load_step() override;
-        /// returns true is the load step is last
-        virtual bool is_step_last() override;
-        /// 
-        int get_max_iterations() override;
+struct LoadStepManagerOpts
+{
+  /// The maximum number of iterations allowed for any iteration loop.
+  int max_iterations;
+  /// step reduction if convergence not achieved
+  float reduction_coeff;
+  /// step increase when convergence is achieved in a number of steps
+  float increase_coeff;
+  /// number of converged steps to start increasing the step
+  int numberConvergedStepsForIncrease;
+};
 
-    protected:
-        /// The maximum number of iterations allowed for any iteration loop.
-        int max_iterations;
-        float reduction_coeff;
-    };
+/// A load step manager class
+class NonlinearStaticLoadStepManager 
+{
+public:
+  /// Constructor
+  /// LSopts_ - from input ???
+  ///
+  NonlinearStaticLoadStepManager(LoadStepManagerOpts LSopt_): LSopts_(LSopts_)
+  ///                                                             
+  /// starts load step loop
+  virtual void start_load_step_loop();
+  /// returns next load step
+  virtual next_load_step() override;
+  /// returns true is the load step is last
+  virtual bool is_step_last() override;
+  /// returns max_iterations  
+  int get_max_iterations() override;
+  /// step reduction if convergence not achieved
+  float get_reduction_coeff() override;
+  /// returns the step increase coefficient 
+  float get_increase_coeff();
+  /// returns the number of converged steps to start increasing the step
+  int get_numberConvergedStepsForIncrease();
+
+protected:
+  LoadStepManagerOpts LSopts_;
+};
+
 }

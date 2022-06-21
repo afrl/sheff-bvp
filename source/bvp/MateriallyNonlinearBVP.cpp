@@ -100,6 +100,8 @@ SolveTimeStepResult MateriallyNonlinearBVP::solve_next_time_step(BVPData& bvp_da
 //
 //
 {
+    int numberOfconsecutiveConvergedSteps = 0;
+
     while (is_end_for_time_steps(bvp_data) ) {
         _F_BEGIN2(bvp_data.bvp_name());
     
@@ -171,7 +173,10 @@ SolveTimeStepResult MateriallyNonlinearBVP::solve_next_time_step(BVPData& bvp_da
         SolverStatus NonlinearStepSolver(const NonLinearSolverParameters &parameters, &gl_stiffness, &gl_rhs, &gl_displacement);
         
         if (SolverStatus.string_stats["converged"]=="converged") {
-            /// update solution vectors
+            /// update solution vectors/// step increase when convergence is achieved in a number of steps
+  float increase_coeff;
+  /// number of converged steps to start increasing the step
+  int numberConvergedStepsForIncrease
             solution_prev = &gl_displacement;
             rhs_prev = &gl_rhs;
             eigenstrain_force_prev = &gl_eigenstrain_force;
@@ -188,6 +193,9 @@ SolveTimeStepResult MateriallyNonlinearBVP::solve_next_time_step(BVPData& bvp_da
             // Execute the update for ISVs
             assembler.execute(/* updated solution goes here */ bvp_data.solution(),
                                 bvp_data.dof_manager().get_dof_maps());
+        
+            bool convergence_achieved = true;
+            int numberOfconsecutiveConvergedSteps += 1;
         }
         else {
             /// not converged; make the step smaller
@@ -195,6 +203,7 @@ SolveTimeStepResult MateriallyNonlinearBVP::solve_next_time_step(BVPData& bvp_da
             int tsc = bvp_data.core_data.time_discr_data.last_converged_time_step;
             double add_load_step = (bvp_data.core_data.load_step(tsc)+bvp_data.core_data.load_step(tsc+1))/reduction_coeff;
             int insert_index = bvp_data.core_data.load_step.begin()+tsc;
+            int numberOfconsecutiveConvergedSteps= 0;
             bvp_data.core_data.load_step.insert(insert_index,add_load_step);
         }
     }
