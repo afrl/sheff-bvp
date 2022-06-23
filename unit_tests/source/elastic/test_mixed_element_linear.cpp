@@ -43,7 +43,7 @@ int main(int argc, char** argv)
 
     auto element_workspace_ptr = std::make_unique<finite_element::ElementWorkspace>();
     simple_math::GeneralVector elem_solution_vector;
-    for (auto& fe_accessor : bvp_data.fe_mesh().finite_elements())
+    for (auto fe_accessor : bvp_data.fe_mesh().finite_elements())
     {
         if (mesh::get_category(fe_accessor.element.type()) == mesh::ElementTypeCategory::SOLID)
         {

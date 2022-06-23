@@ -212,7 +212,7 @@ int main(int argc, char** argv)
         auto& normal = sample.normal;
 
         FiniteElementMesh fe_mesh(mesh::get_unit_element(mesh::ElementType::H3D8N));
-        for (auto& finite_element : fe_mesh.finite_elements())
+        for (auto finite_element : fe_mesh.finite_elements())
         {
             model_selection.assign_field_models(finite_element, "InfinitesimalStrain", props_ref);
             FiniteElement::allocate_isvs(finite_element.layout);
@@ -225,7 +225,7 @@ int main(int argc, char** argv)
                                                           direction_criterion_ref);
 
 
-        auto& element_0 = fe_mesh.mesh.elements()[0];
+        auto element_0 = fe_mesh.mesh.elements()[0];
         simple_math::GeneralVector nodal_sign_dist =
           compute_nodal_signed_distances(element_0, simple_math::to_point(sample.position), normal);
 
