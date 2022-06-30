@@ -132,11 +132,6 @@ struct BVPData
         return core_data.boundary_conditions;
     }
 
-    inline auto& bcs(float loadCoefficient)
-    {
-        return loadCoefficient*core_data.boundary_conditions;
-    }
-
     inline auto& solution()
     {
         _UTIL_ASSERT_C(core_data.solution.size() > 0,

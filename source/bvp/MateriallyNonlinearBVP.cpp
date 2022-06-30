@@ -110,7 +110,7 @@ void MateriallyNonlinearBVP::apply_boundary_conditions(BVPData& bvp_data, float 
 {
     auto& lin_alg = static_cast<MateriallyNonlinearLinearAlgebra&>(*bvp_data.gl_lin_alg);
 
-    for (auto& bc : bvp_data.bcs(float loadCoefficient))
+    for (auto& bc : bvp_data.bcs())
     {
         // IMPORTANT NOTE: this assumes the field has # of components as dimensionality
         // This works for displacement with solid elements, but reconsider what should
@@ -120,6 +120,7 @@ void MateriallyNonlinearBVP::apply_boundary_conditions(BVPData& bvp_data, float 
                        bvp_data.node_to_element_map(),
                        bvp_data.dof_manager().get_dof_maps(),
                        utility::GlobalVariables::get_dimensionality(),
+                       loadCoefficient,
                        *lin_alg.constraint_matrix);
     }
 }
