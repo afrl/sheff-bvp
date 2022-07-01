@@ -1,6 +1,7 @@
 #pragma once
 
 #include "bvp/bvp/BoundaryValueProblem.h"
+#include "bvp/bvp/FractureBVP.h"
 #include "sparse_linear_algebra/SparseMatrix.h"
 #include "sparse_linear_algebra/SparseSolver.h"
 #include "sparse_linear_algebra/Vector.h"
@@ -43,6 +44,12 @@ class MateriallyNonlinearBVP : public BoundaryValueProblem
 
     virtual ~MateriallyNonlinearBVP() {}
 
+    /// TODO fix this...does FractureBVP need to inherit from this?
+    /// Insert precracks by initiating a new crack at the given point and growing the surface
+    /// via the direction criterion and growth criterion that were assigned to the elements.
+    void insert_precracks(BVPData& bvp_data,
+                          const std::vector<SurfaceInitiationAtPoint>& initations) const;
+
 
     /// @brief Solves the next time step for the boundary value problem, if there any remaining.
     virtual SolveTimeStepResult solve_next_time_step(BVPData& bvp_data) const override;
@@ -61,6 +68,9 @@ class MateriallyNonlinearBVP : public BoundaryValueProblem
     ///
     /// Modifies the constraint matrix and appropriate vectors in bvp_data.gl_lin_alg.
     virtual void apply_boundary_conditions(BVPData& bvp_data) const override;
+
+    // TODO - again deal with combining FractureBVP
+    xfem::Params get_xfem_params(BVPData& bvp_data) const;
 };
 
 }

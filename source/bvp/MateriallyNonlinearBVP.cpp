@@ -1,6 +1,9 @@
 #include "bvp/bvp/MateriallyNonlinearBVP.h"
 
 #include "finite_element/FiniteElement.h"
+#include "finite_element/ModelSelectionHelper.h"
+#include "finite_element/hhe_primitives/PrimitiveAlgorithms.h"
+#include "mesh/algorithms/Search.h"
 #include "sparse_linear_algebra/LinAlgFactory.h"
 #include "sparse_linear_algebra/NonLinearSolver.h"
 #include "sparse_linear_algebra/SparseMatrix.h"
@@ -119,6 +122,114 @@ void MateriallyNonlinearBVP::apply_boundary_conditions(BVPData& bvp_data) const
     }
 }
 
+void MateriallyNonlinearBVP::insert_precracks(
+  BVPData& bvp_data,
+  const std::vector<SurfaceInitiationAtPoint>& initations) const
+{
+    init_all_data(bvp_data);
+
+    auto& enrichment_surfaces_data = bvp_data.enrichment_surfaces_data();
+    auto xfem_param                = get_xfem_params(bvp_data);
+    auto e_workspace               = std::make_unique<finite_element::ElementWorkspace>();
+
+    auto& selection_helper = finite_element::ModelSelectionHelper::get();
+    for (auto& initation : initations)
+    {
+        //////////////////////////////////////////////////////////////////////////////////////
+        // Create and initiate the surface
+
+        auto surface_model =
+          selection_helper.create_enrichment_surface_model("InfinitesimalStrain",
+                                                           initation.properties,
+                                                           initation.growth_criterion,
+                                                           initation.direction_criterion);
+
+        auto find_result =
+          mesh::find_element_with_point(bvp_data.mesh(), initation.initiation_point);
+        if (!find_result.first)
+        {
+            throw _UTIL_MSG_EXCEPT("No element was found that contains the point " +
+                                   simple_math::to_string(initation.initiation_point));
+        }
+        auto initation_fe = bvp_data.fe_mesh().get_finite_element(find_result.second);
+
+        auto& direction_criteria             = initation.direction_criterion;
+        simple_math::VoigtVector zero_stress = simple_math::VoigtVector::Zero(6);
+        auto global_surface_id =
+          static_cast<xfem::EnrichmentSurfaceID>(enrichment_surfaces_data.size() - 1);
+        auto crack_normal =
+          direction_criteria.get().eval(global_surface_id, initation.initiation_point, zero_stress);
+
+        enrichment_surfaces_data.push_back(
+          xfem::initiate_surface(xfem_param,
+                                 surface_model.enrichment_model,
+                                 surface_model.pointwise_enrichment_model_data,
+                                 initation_fe,
+                                 0,
+                                 initation.initiation_point,
+                                 crack_normal));
+        xfem::update_surface_ids(xfem_param, enrichment_surfaces_data);
+
+        xfem::write_level_sets_to_vtk(enrichment_surfaces_data,
+                                      xfem_param,
+                                      "./",
+                                      enrichment_surfaces_data.back().global_surface_id, // step #
+                                      0); // substep #
+    }
+
+    for (auto& surface_data : enrichment_surfaces_data)
+    {
+        //////////////////////////////////////////////////////////////////////////////////////
+        // Grow the new surface until it cannot grow any further
+
+        int growth_step = 1;
+        while (!surface_data.enrichments_at_front.empty())
+        {
+            std::vector<xfem::EnrichmentIndexInSurface> enrichment_indices_to_grow;
+            for (auto& index : surface_data.enrichments_at_front)
+            {
+                auto enrichment_ref = surface_data.enrichment_refs[index];
+                auto front_element  = xfem::get_element(xfem_param, enrichment_ref);
+                auto& enrichment    = xfem::get_enrichment(xfem_param, enrichment_ref);
+                auto& criterion     = enrichment.get_growth_criterion();
+
+                if (criterion.eval(surface_data.global_surface_id,
+                                   mesh::calc_mean_coordinate(front_element),
+                                   simple_math::Vector3D::Zero()))
+                {
+                    enrichment_indices_to_grow.push_back(index);
+                }
+            }
+
+            // If no enrichments can grow due to the propagation criteria, then stop
+            if (enrichment_indices_to_grow.empty())
+            {
+                break;
+            }
+
+            for (auto& index : enrichment_indices_to_grow)
+            {
+                auto search_results = xfem::search_ahead_of_front(surface_data, xfem_param, index);
+
+                auto new_growth_occurred = xfem::grow_surface_front_into_all_leaves(surface_data,
+                                                                                    xfem_param,
+                                                                                    index,
+                                                                                    search_results,
+                                                                                    *e_workspace);
+            }
+
+            xfem::write_level_sets_to_vtk(
+              enrichment_surfaces_data,
+              xfem_param,
+              "./",
+              enrichment_surfaces_data.back().global_surface_id, // step #
+              static_cast<int>(growth_step));                    // substep #
+
+            growth_step++;
+        }
+    }
+}
+
 SolveTimeStepResult MateriallyNonlinearBVP::solve_next_time_step(BVPData& bvp_data) const
 {
     init_all_data(bvp_data);
@@ -232,6 +343,27 @@ SolveTimeStepResult MateriallyNonlinearBVP::solve_next_time_step(BVPData& bvp_da
     return { true, /* converged */
              time_discr_data.current_time ==
                time_discr_data.target_times.back() /* done with time steps */ };
+}
+
+xfem::Params MateriallyNonlinearBVP::get_xfem_params(BVPData& bvp_data) const
+{
+    // Create the callback for the fea_crack module to get the element solution
+    // vector when evaluating the direction criteria.
+    const auto& solution = bvp_data.solution();
+    const auto& dof_map  = bvp_data.dof_manager().get_dof_maps();
+    xfem::GetElementSolutionCallback get_element_solution_cb =
+      [&solution, &dof_map](
+        const finite_element::FiniteElementConstAccessor& fe_accessor) -> simple_math::GeneralVector
+    {
+        return assembler::extract_element_solution_vector(solution,
+                                                          dof_map,
+                                                          fe_accessor.element.local_index());
+    };
+
+    return xfem::make_params(bvp_data.fe_mesh(),
+                             bvp_data.adjacency_list(),
+                             get_element_solution_cb,
+                             bvp_data.dof_manager());
 }
 
 } // end namespace bvp

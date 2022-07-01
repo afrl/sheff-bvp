@@ -1,5 +1,5 @@
 #include "../../UnitTestHelpers.h"
-#include "bvp/bvp/FractureBVP.h"
+#include "bvp/bvp/MateriallyNonlinearBVP.h"
 #include "constitutive/enrichment/deformation/turon_06_cz/Turon06EnrichmentProperties.h"
 #include "constitutive/enrichment/direction_criteria/PositionFunctionDirectionCriterion.h"
 #include "constitutive/enrichment/growth_criteria/AlwaysGrowGrowthCriterion.h"
@@ -46,7 +46,7 @@ int main(int argc, char** argv)
     //////////////////////////////////////////////////////////////////////////////////////////////
     // Define boundary value problem
 
-    auto bvp = FractureBVP::get();
+    auto bvp = MateriallyNonlinearBVP::get();
     BVPData bvp_data;
     bvp.set_input(mesh::make_linear_grid({ 0, 1, 2, 3 }, { 0, 1 }, { 0, 1, 2, 3 }),
                   get_test_name(__FILE__),
