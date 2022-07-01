@@ -42,12 +42,6 @@ class LinearElasticBVP : public BoundaryValueProblem
     /// @brief Solves the next time step for the boundary value problem, if there any remaining.
     virtual SolveTimeStepResult solve_next_time_step(BVPData& bvp_data) const override;
 
-    /// @brief Returns a boolean indicating if the current state is the end of time stepping.
-    ///
-    /// If true is returned, solve_next_time_step() will do nothing, while if false is returned,
-    /// then solve_next_time_step() will solve the next time step as expected.
-    virtual bool is_end_for_time_steps(BVPData& bvp_data) const override;
-
   protected:
     LinearElasticBVP() {}
 

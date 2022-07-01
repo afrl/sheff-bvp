@@ -15,6 +15,9 @@ struct DirichletBCOpts
     /// node where signs match up the enrichment tree (in other words, the node lies within the
     /// basal field's physical domain).
     BCApplicationType application_type = BCApplicationType::SURFACE;
+    /// For simulations with multiple time/load steps, the value can be scaled as a function of
+    /// time. If the index is -1, then the BC value will be constant throughout the simulation.
+    int scale_function_index = -1;
 
     template<typename SerializerType>
     void serialize(SerializerType& s) const
@@ -59,6 +62,12 @@ class DirichletBC final : public BoundaryCondition
                             const double& scale_factor,
                             const bool& is_incremental,
                             sparse_linear_algebra::ConstraintMatrix& constraint_matrix) override;
+
+    /// @see BoundaryCondition::get_scale_factor_function_index
+    virtual int get_scale_factor_function_index() const override
+    {
+        return opts_.scale_function_index;
+    }
 
     template<typename SerializerType>
     void serialize(SerializerType& s) const

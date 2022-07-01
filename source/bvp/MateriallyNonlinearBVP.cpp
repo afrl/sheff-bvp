@@ -2,6 +2,7 @@
 
 #include "finite_element/FiniteElement.h"
 #include "sparse_linear_algebra/LinAlgFactory.h"
+#include "sparse_linear_algebra/NonLinearSolver.h"
 #include "sparse_linear_algebra/SparseMatrix.h"
 #include "sparse_linear_algebra/Vector.h"
 #include "utility/Profile.h"
@@ -11,27 +12,6 @@
 
 namespace bvp
 {
-
-LoadStepManagerOpts loadParameters;
-/// parameters have to come form some input
-/// The maximum number of iterations allowed for any iteration loop.
-loadParameters.max_iterations=100;
-  /// step reduction if convergence not achieved
-loadParameters.reduction_coeff=2;
-  /// step increase when convergence is achieved in a number of steps
-loadParamters.increase_coeff=1.2;
-  /// number of converged steps to start increasing the step
-loadParameters.numberConvergedStepsForIncrease;
-  /// load sequence from the input file????
-loadParameters.load_sequence_init;
-  ///
-loadParameters.loadSequenceIndex;
-
-NonlinearStaticLoadStepManager  loadSequence(const LoadStepManagerOpts loadParameters);
-///
-/// this load sequence is going to change during solution
-///
-loadSequence.load_sequence_init_current = loadParameters.load_sequence_init;
 
 std::vector<sparse_linear_algebra::Vector*> MateriallyNonlinearLinearAlgebra::vectors() const
 {
@@ -87,13 +67,16 @@ void MateriallyNonlinearBVP::init_lin_algebra(BVPData& bvp_data) const
     lin_alg.stiffness->set_constraint_matrix(lin_alg.constraint_matrix.get());
     lin_alg.stiffness->allocate();
 
+    lin_alg.delta_solution = sparse_linear_algebra::LinAlgFactory::get().create_vector(dof_refs);
+    lin_alg.delta_solution->allocate();
     lin_alg.solution = sparse_linear_algebra::LinAlgFactory::get().create_vector(dof_refs);
     lin_alg.solution->allocate();
     lin_alg.solution_prev = sparse_linear_algebra::LinAlgFactory::get().create_vector(dof_refs);
     lin_alg.solution_prev->allocate();
     lin_alg.eigenstrain_force = sparse_linear_algebra::LinAlgFactory::get().create_vector(dof_refs);
     lin_alg.eigenstrain_force->allocate();
-    lin_alg.eigenstrain_force_prev = sparse_linear_algebra::LinAlgFactory::get().create_vector(dof_refs);
+    lin_alg.eigenstrain_force_prev =
+      sparse_linear_algebra::LinAlgFactory::get().create_vector(dof_refs);
     lin_alg.eigenstrain_force_prev->allocate();
     lin_alg.rhs = sparse_linear_algebra::LinAlgFactory::get().create_vector(dof_refs);
     lin_alg.rhs->allocate();
@@ -106,12 +89,22 @@ void MateriallyNonlinearBVP::init_lin_algebra(BVPData& bvp_data) const
     _F_END();
 }
 
-void MateriallyNonlinearBVP::apply_boundary_conditions(BVPData& bvp_data, float loadCoefficient) const
+void MateriallyNonlinearBVP::apply_boundary_conditions(BVPData& bvp_data) const
 {
     auto& lin_alg = static_cast<MateriallyNonlinearLinearAlgebra&>(*bvp_data.gl_lin_alg);
 
     for (auto& bc : bvp_data.bcs())
     {
+        const auto scale_factor_function_index = bc->get_scale_factor_function_index();
+        auto bc_scale_factor                   = 0.0;
+        if (scale_factor_function_index != -1)
+        {
+            const auto current_time = bvp_data.core_data.time_discr_data.current_time;
+            bc_scale_factor =
+              bvp_data.core_data.time_discr_data.scale_functions[scale_factor_function_index]
+                .get_scale_factor(current_time);
+        }
+
         // IMPORTANT NOTE: this assumes the field has # of components as dimensionality
         // This works for displacement with solid elements, but reconsider what should
         // be done to handle scalar fields, shell elements, combined fields, etc.
@@ -120,269 +113,125 @@ void MateriallyNonlinearBVP::apply_boundary_conditions(BVPData& bvp_data, float 
                        bvp_data.node_to_element_map(),
                        bvp_data.dof_manager().get_dof_maps(),
                        utility::GlobalVariables::get_dimensionality(),
-                       loadCoefficient,
+                       bc_scale_factor,
+                       true, /* is_incremental */
                        *lin_alg.constraint_matrix);
     }
 }
 
-MateriallyNonlinearBVP::solve_time_steps(BVPData& bvp_data) const
-//
-//
-{   
-    while (not_last_step_done()) {
-        _F_BEGIN2(bvp_data.bvp_name());
+SolveTimeStepResult MateriallyNonlinearBVP::solve_next_time_step(BVPData& bvp_data) const
+{
+    init_all_data(bvp_data);
 
-        loadSequence.increase_loadSequenceIndex();
-      
-        init_all_data(bvp_data);
-    
-        // Write restart data
-        // Create a directory for the current time step
-        if (loadSequence.get_previous_step_state()) {
-            bvp_data.core_data.time_discr_data.last_converged_time_step++;
-            auto curr_time_step = bvp_data.core_data.time_discr_data.last_converged_time_step;
-            auto ts_dir         = bvp_data.output_dir() / ("ts_" + std::to_string(curr_time_step));
-            if (!fs::exists(ts_dir))
+    auto& time_discr_data = bvp_data.core_data.time_discr_data;
+
+    auto current_time_step   = time_discr_data.last_converged_time_step + 1;
+    double target_time       = time_discr_data.target_times[current_time_step];
+    double last_substep_time = time_discr_data.last_converged_time;
+
+    // Create a directory for the current time step
+    auto ts_dir = bvp_data.output_dir() / ("ts_" + std::to_string(current_time_step));
+    if (!fs::exists(ts_dir))
+    {
+        fs::create_directory(ts_dir);
+    }
+
+    auto log_stage_name = bvp_data.bvp_name() + "_ts" + std::to_string(current_time_step);
+    sparse_linear_algebra::LinAlgFactory::get().start_log_stage(log_stage_name);
+
+    auto& lin_alg = static_cast<MateriallyNonlinearLinearAlgebra&>(*bvp_data.gl_lin_alg);
+
+    // TODO reevaluate how often the local array is updated and see if the tangent and residual can
+    //      calculated in the same assembler execute call.
+    auto& assembler = bvp_data.assembler();
+    auto& dof_maps  = bvp_data.dof_manager().get_dof_maps();
+    std::vector<double> local_solution(dof_maps.n_dofs_on_rank(), 0.0);
+    std::function<void(const sparse_linear_algebra::Vector&, sparse_linear_algebra::SparseMatrix&)>
+      tangent_matrix_functor =
+        [&local_solution, &assembler, &dof_maps](const sparse_linear_algebra::Vector& solution,
+                                                 sparse_linear_algebra::SparseMatrix& A)
+    {
+        solution.update_local_array(local_solution);
+        assembler.queue_assembly(finite_element::FEMatricesAndVectors::Flags::LHSMatrix, &A);
+        assembler.execute(local_solution, dof_maps);
+    };
+    std::function<void(const sparse_linear_algebra::Vector&, sparse_linear_algebra::Vector&)>
+      residual_functor =
+        [&local_solution, &assembler, &dof_maps](const sparse_linear_algebra::Vector& solution,
+                                                 sparse_linear_algebra::Vector& residual)
+    {
+        solution.update_local_array(local_solution);
+        // Note: this calculates the "internal force vector"
+        assembler.queue_assembly(finite_element::FEMatricesAndVectors::Flags::CompleteRHSVector,
+                                 &residual);
+        assembler.execute(local_solution, dof_maps);
+        // TODO implement residual = "external force vector" - "internal force vector"
+    };
+
+    // Note that these are references
+    double& delta_time   = time_discr_data.current_delta_time;
+    double& current_time = time_discr_data.current_time;
+    while (last_substep_time == target_time)
+    {
+        // Figure out the time that will be used for this substep
+        current_time = last_substep_time + delta_time;
+        if (current_time > target_time)
+        {
+            current_time = target_time;
+        }
+
+        // Initialize boundary conditions
+        apply_boundary_conditions(bvp_data);
+
+        // try to solve nonlinear problem
+        bool substep_converged = false;
+        sparse_linear_algebra::NonLinearSolverParameters nl_params; // TODO set this via input file
+        auto status       = sparse_linear_algebra::nonlinear_solve(nl_params,
+                                                             lin_alg.solution_prev.get(),
+                                                             *lin_alg.sparse_solver,
+                                                             lin_alg.stiffness.get(),
+                                                             lin_alg.rhs.get(),
+                                                             lin_alg.delta_solution.get(),
+                                                             tangent_matrix_functor,
+                                                             residual_functor);
+        substep_converged = status.integral_stats["converged"] == 1;
+
+        if (substep_converged)
+        {
+            last_substep_time = current_time;
+
+            *lin_alg.solution_prev = *lin_alg.solution;
+            *lin_alg.solution      = *lin_alg.delta_solution + *lin_alg.solution_prev;
+
+            /// update the internal state variables (overwritting the
+            /// internal state variables for the last converged time step)
+            assembler.queue_operation(
+              [](finite_element::FiniteElement::ConstParams& params,
+                 finite_element::FiniteElementAccessor& fe)
+              { finite_element::FiniteElement::update_converged_isvs(params, fe.layout); });
+            lin_alg.solution->update_local_array(local_solution);
+            // Execute the update for ISVs
+            assembler.execute(local_solution, dof_maps);
+
+            if (time_discr_data.n_consecutive_converged_substeps ==
+                time_discr_data.n_consecutive_substeps_before_increase)
             {
-                fs::create_directory(ts_dir);
+                time_discr_data.n_consecutive_converged_substeps = 0;
+                delta_time *= 2.0;
             }
-        
-            auto log_stage_name = bvp_data.bvp_name() + "_ts" + std::to_string(curr_time_step);
-        // After residual is converged, update the internal state variables (overwritting the
-        // internal state variables for the last converged time step)
-            sparse_linear_algebra::LinAlgFactory::get().start_log_stage(log_stage_name);
         }
-        _F_BEGIN2("apply BC's");
-    
+        else
+        {
+            time_discr_data.n_consecutive_converged_substeps = 0;
+            delta_time /= 2.0;
+        }
+    }
 
+    sparse_linear_algebra::LinAlgFactory::get().end_current_log_stage();
 
-        // TODO indicate if Secant or Tangent with BCUpdateType::Secant
-        apply_boundary_conditions(bvp_data, loadSequence.loadCoefficient);
-    
-        _F_END();
-    
-        //////////////
-        // Assembly //
-        //////////////
-
-        if (current_load_step()==1) {
-            _F_BEGIN2("assembly");
-            auto& assembler            = bvp_data.assembler();
-            auto& lin_alg              = static_cast<MateriallyNonlinearLinearAlgebra&>(*bvp_data.gl_lin_alg);
-            auto& gl_stiffness         = *lin_alg.stiffness;
-            auto& gl_disp_increment    = *lin_alg.solution;
-            auto& gl_displacement      = *lin_alg.solution_prev;
-            auto& gl_eigenstrain_force = *lin_alg.eigenstrain_force;
-            auto& gl_eigen_force_prev  = *lin_alg.eigenstrain_force_prev;
-            auto& gl_rhs               = *lin_alg.rhs;
-            auto& gl_rhs_prev          = *lin_alg.rhs_prev;
-
-            gl_rhs_prev  = 0.0;
-            gl_eigen_force_prev = 0.0;
-            gl_displacement = 0.0;
-    
-        // Queue assembly of the global stiffness matrix
-            assembler.queue_assembly(finite_element::FEMatricesAndVectors::Flags::LHSMatrix, &gl_stiffness);
-    
-        // Queue assembly of the global vector containing RHS terms pertaining
-        // to eigenstrains (such as thermal strain, plastic strain, etc.)
-            assembler.queue_assembly(finite_element::FEMatricesAndVectors::Flags::RHSVector,
-                                 &gl_eigenstrain_force);
-    
-        // Execute both assemblies as one element loop
-            assembler.execute(bvp_data.solution(), bvp_data.dof_manager().get_dof_maps());
-    
-            _F_END();
-    
-        // Total RHS = constraint RHS + applied loads + inelastic RHS (temperature/moisture terms)
-            gl_rhs = gl_rhs + gl_eigenstrain_force;
-    
-        if (BVPGlobalOptions::get().save_global_matrices)
-            {
-                gl_stiffness.save((ts_dir / "matrix_pre_constraints.bin").generic_string());
-                gl_rhs.save((ts_dir / "rhs_pre_constraints.bin").generic_string());
-            }
-        ///
-        ///   this is a call to the NonlinearSlover that Doug develops; not working yet;
-        ///   
-        ///   Note: the function returns displacements, not incremental displacements!!!!
-        ///
-            SolverStatus sparse_linear_algebra::nonlinear_solve(
-                const NonLinearSolverParameters &parameters,
-                &gl_displacement,
-                SparseSolver& solver, 
-                &gl_stiffness, 
-                &gl_rhs, 
-                &gl_disp_increment,
-                std::function<void(const Vector&, SparseMatrix&)> update_tangent_matrix,
-                std::function<void(const Vector&, Vector&)> update_residual,
-                std::function<bool(const Vector&, double&, unsigned int&)> convergence_criterion);
-        
-            if (state.integral_stats["converged"] ==1) {
-                /// update solution vectors/// step increase when convergence is achieved in a number of steps (if previously it was decreased)
-                gl_rhs_prev  = gl_rhs;
-                gl_eigen_force_prev = gl_eigenstrain_force;
-                gl_displacement = gl_disp_increment;
-                
-                sparse_linear_algebra::LinAlgFactory::get().end_current_log_stage();
-        
-                /// update the internal state variables (overwritting the
-                /// internal state variables for the last converged time step)
-                assembler.queue_operation(
-                        [](finite_element::FiniteElement::ConstParams& params,
-                        finite_element::FiniteElementAccessor& fe)
-                        { finite_element::FiniteElement::update_converged_isvs(params, fe.layout); });
-            
-                // Execute the update for ISVs
-                assembler.execute(/* updated solution goes here */ bvp_data.solution(),
-                                    bvp_data.dof_manager().get_dof_maps());
-            
-                bool convergence_achieved = true;
-                if (loadSequence.numberConvergedStepsForIncrease>0){
-                    loadSequence.numberConvergedStepsForIncrease += 1;
-                }
-            }
-            else {
-                /// not converged; make the step smaller
-                /// 
-                loadSequence.add_additional_steps();
-            }
-        }
-        else {
-             _F_BEGIN2("assembly");
-            auto& assembler            = bvp_data.assembler();
-            auto& lin_alg              = static_cast<MateriallyNonlinearLinearAlgebra&>(*bvp_data.gl_lin_alg);
-            auto& gl_stiffness         = *lin_alg.stiffness;
-            auto& gl_disp_increment    = *lin_alg.solution;
-            auto& gl_displacement      = *lin_alg.solution_prev;
-            auto& gl_eigenstrain_force = *lin_alg.eigenstrain_force;
-            auto& gl_eigen_force_prev  = *lin_alg.eigenstrain_force_prev;
-            auto& gl_rhs               = *lin_alg.rhs;
-            auto& gl_rhs_prev          = *lin_alg.rhs_prev;
-    
-        // Queue assembly of the global stiffness matrix
-            assembler.queue_assembly(finite_element::FEMatricesAndVectors::Flags::LHSMatrix, &gl_stiffness);
-    
-        // Queue assembly of the global vector containing RHS terms pertaining
-        // to eigenstrains (such as thermal strain, plastic strain, etc.)
-            assembler.queue_assembly(finite_element::FEMatricesAndVectors::Flags::RHSVector,
-                                 &gl_eigenstrain_force);
-    
-        // Execute both assemblies as one element loop
-            assembler.execute(bvp_data.solution(), bvp_data.dof_manager().get_dof_maps());
-    
-            _F_END();
-    
-        // Total RHS = constraint RHS + applied loads + inelastic RHS (temperature/moisture terms)
-            gl_rhs = gl_rhs + gl_eigenstrain_force - gl_eigen_force_prev;
-    
-        if (BVPGlobalOptions::get().save_global_matrices)
-            {
-                gl_stiffness.save((ts_dir / "matrix_pre_constraints.bin").generic_string());
-                gl_rhs.save((ts_dir / "rhs_pre_constraints.bin").generic_string());
-            }
-        ///
-        ///   this is a call to the NonlinearSlover that Doug develops; not working yet;
-        ///   
-        ///   Note: the function returns displacements, not incremental displacements!!!!
-        ///
-            SolverStatus sparse_linear_algebra::nonlinear_solve(
-                const NonLinearSolverParameters &parameters,
-                gl_displacement,
-                SparseSolver& solver, 
-                &gl_stiffness, 
-                &gl_rhs, 
-                &gl_disp_increment,
-                std::function<void(const Vector&, SparseMatrix&)> update_tangent_matrix,
-                std::function<void(const Vector&, Vector&)> update_residual,
-                std::function<bool(const Vector&, double&, unsigned int&)> convergence_criterion);
-        
-            if (state.integral_stats["converged"] ==1) {
-                /// update solution vectors/// step increase when convergence is achieved in a number of steps (if previously it was decreased)
-                gl_rhs_prev  = gl_rhs;
-                gl_eigen_force_prev = gl_eigenstrain_force;
-                gl_displacement = gl_displacement + gl_disp_increment;
-                
-                sparse_linear_algebra::LinAlgFactory::get().end_current_log_stage();
-        
-                /// update the internal state variables (overwritting the
-                /// internal state variables for the last converged time step)
-                assembler.queue_operation(
-                        [](finite_element::FiniteElement::ConstParams& params,
-                        finite_element::FiniteElementAccessor& fe)
-                        { finite_element::FiniteElement::update_converged_isvs(params, fe.layout); });
-            
-                // Execute the update for ISVs
-                assembler.execute(/* updated solution goes here */ bvp_data.solution(),
-                                    bvp_data.dof_manager().get_dof_maps());
-            
-                bool convergence_achieved = true;
-                loadSequence.loadSequenceIndex += 1;
-                loadSequence.number_converged_steps += 1; 
-                if (loadSequence.numberConvergedStepsForIncrease>0){
-                    loadSequence.numberConvergedStepsForIncrease += 1;
-                }
-            }
-            else {
-                /// not converged; make the step smaller
-                /// 
-                loadSequence.add_additional_steps();
-            }
-        }
-    }
-}        
-
-    NonlinearStaticLoadStepManager::increase_loadSequenceIndex() const{
-        loadSequenceIndex += 1;
-        loadCoefficient += load_sequence_init_current(loadSequenceIndex);
-    }
-    /// 
-    NonlinearStaticLoadStepManager::decrease_loadSequenceIndex() const{
-        loadSequenceIndex -= 1;
-        loadCoefficient -= load_sequence_init_current(loadSequenceIndex);
-    }
-    /// returns true if it is not over the last step
-    NonlinearStaticLoadStepManage::not_last_step_done() {
-        if (loadSequenceIndex <= sizeof(load_sequence_init_current) ){
-            return true;
-        }
-        else {
-            return false;
-        }
-    }
-    /// returns max_iterations  
-    NonlinearStaticLoadStepManage::get_max_iterations(){
-        return LSopts_.max_iterations;
-    }
-    /// step reduction if convergence not achieved
-    NonlinearStaticLoadStepManage::get_reduction_coeff() {
-        return LSopts_.reduction_coeff;
-    }
-    /// returns the step increase coefficient 
-    NonlinearStaticLoadStepManage::get_increase_coeff(){
-        return LSopts_.increase_coeff;
-    }
-    /// returns the number of converged steps to start increasing the step
-    NonlinearStaticLoadStepManage::get_numberConvergedStepsForIncrease(){
-        return numberConsecutiveConvergedSteps;
-    }
-    /// returns state of the previous step - converged or not and changes the state
-    NonlinearStaticLoadStepManage::get_previous_step_state(){
-        return previous_step_converged;
-    }
-    NonlinearStaticLoadStepManage::add_additional_steps(){
-        if (loadSequenceIndex > 0 ) {
-            float stepSize = load_sequence_init_current(loadSequenceIndex) - load_sequence_init_current(loadSequenceIndex-1);
-        }
-        else {
-           float stepSize = load_sequence_init_current(0); 
-        }
-        stepSize = stepSize/LSopts_.reduction_coeff;
-        for (int i=0, i < LSopts_.reduction_coeff, i++) {
-                int insert_index = begin()+loadSequenceIndex + i - 1;
-                bvp_data.core_data.load_step.insert(insert_index,stepSize;
-        }
-        numberConvergedStepsForIncrease= 0;
-    }
+    return { true, /* converged */
+             time_discr_data.current_time ==
+               time_discr_data.target_times.back() /* done with time steps */ };
+}
 
 } // end namespace bvp

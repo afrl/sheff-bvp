@@ -28,5 +28,7 @@ class BoundaryCondition
                             const double& scale_factor,
                             const bool& is_incremental,
                             sparse_linear_algebra::ConstraintMatrix& constraint_matrix) = 0;
+    /// TODO document
+    virtual int get_scale_factor_function_index() const                                 = 0;
 };
 }

@@ -203,17 +203,9 @@ SolveTimeStepResult LinearElasticBVP::solve_next_time_step(BVPData& bvp_data) co
 
     _F_END();
 
-    return { true, is_end_for_time_steps(bvp_data) };
-}
-
-bool LinearElasticBVP::is_end_for_time_steps(BVPData& bvp_data) const
-{
     auto& time_discr_data = bvp_data.core_data.time_discr_data;
-    if (time_discr_data.type == TimeDiscretizationType::STATIC)
-    {
-        return time_discr_data.last_converged_time_step == 0;
-    }
-    throw _UTIL_MSG_EXCEPT_C("Discretization type not implimented.");
+    return { true,
+             time_discr_data.target_times.size() == time_discr_data.last_converged_time_step };
 }
 
 } // end namespace bvp
