@@ -66,28 +66,56 @@ void MateriallyNonlinearBVP::init_lin_algebra(BVPData& bvp_data) const
         dof_refs,
         bvp_data.core_data.solver_opts.constraint_method);
 
-    lin_alg.stiffness = sparse_linear_algebra::LinAlgFactory::get().create_matrix(dof_refs);
-    lin_alg.stiffness->set_constraint_matrix(lin_alg.constraint_matrix.get());
-    lin_alg.stiffness->allocate();
+    if (!lin_alg.stiffness)
+    {
+        lin_alg.stiffness = sparse_linear_algebra::LinAlgFactory::get().create_matrix(dof_refs);
+        lin_alg.stiffness->set_constraint_matrix(lin_alg.constraint_matrix.get());
+        lin_alg.stiffness->allocate();
+    }
 
-    lin_alg.delta_solution = sparse_linear_algebra::LinAlgFactory::get().create_vector(dof_refs);
-    lin_alg.delta_solution->allocate();
-    lin_alg.solution = sparse_linear_algebra::LinAlgFactory::get().create_vector(dof_refs);
-    lin_alg.solution->allocate();
-    lin_alg.solution_prev = sparse_linear_algebra::LinAlgFactory::get().create_vector(dof_refs);
-    lin_alg.solution_prev->allocate();
+    if (!lin_alg.delta_solution)
+    {
+        lin_alg.delta_solution =
+          sparse_linear_algebra::LinAlgFactory::get().create_vector(dof_refs);
+        lin_alg.delta_solution->allocate();
+    }
+    if (!lin_alg.solution)
+    {
+        lin_alg.solution = sparse_linear_algebra::LinAlgFactory::get().create_vector(dof_refs);
+        lin_alg.solution->allocate();
+    }
+    if (!lin_alg.solution_prev)
+    {
+        lin_alg.solution_prev = sparse_linear_algebra::LinAlgFactory::get().create_vector(dof_refs);
+        lin_alg.solution_prev->allocate();
+    }
+    if (!lin_alg.eigenstrain_force)
+    {
     lin_alg.eigenstrain_force = sparse_linear_algebra::LinAlgFactory::get().create_vector(dof_refs);
     lin_alg.eigenstrain_force->allocate();
-    lin_alg.eigenstrain_force_prev =
-      sparse_linear_algebra::LinAlgFactory::get().create_vector(dof_refs);
-    lin_alg.eigenstrain_force_prev->allocate();
-    lin_alg.rhs = sparse_linear_algebra::LinAlgFactory::get().create_vector(dof_refs);
-    lin_alg.rhs->allocate();
-    lin_alg.rhs_prev = sparse_linear_algebra::LinAlgFactory::get().create_vector(dof_refs);
-    lin_alg.rhs_prev->allocate();
+    }
+    if (!lin_alg.eigenstrain_force_prev)
+    {
+        lin_alg.eigenstrain_force_prev =
+          sparse_linear_algebra::LinAlgFactory::get().create_vector(dof_refs);
+        lin_alg.eigenstrain_force_prev->allocate();
+    }
+    if (!lin_alg.rhs)
+    {
+        lin_alg.rhs = sparse_linear_algebra::LinAlgFactory::get().create_vector(dof_refs);
+        lin_alg.rhs->allocate();
+    }
+    if (!lin_alg.rhs_prev)
+    {
+        lin_alg.rhs_prev = sparse_linear_algebra::LinAlgFactory::get().create_vector(dof_refs);
+        lin_alg.rhs_prev->allocate();
+    }
 
-    lin_alg.sparse_solver =
-      sparse_linear_algebra::LinAlgFactory::get().create_solver(bvp_data.core_data.solver_opts);
+    if (!lin_alg.sparse_solver)
+    {
+        lin_alg.sparse_solver =
+          sparse_linear_algebra::LinAlgFactory::get().create_solver(bvp_data.core_data.solver_opts);
+    }
 
     _F_END();
 }
@@ -282,7 +310,7 @@ SolveTimeStepResult MateriallyNonlinearBVP::solve_next_time_step(BVPData& bvp_da
     // Note that these are references
     double& delta_time   = time_discr_data.current_delta_time;
     double& current_time = time_discr_data.current_time;
-    while (last_substep_time == target_time)
+    while (last_substep_time != target_time)
     {
         // Figure out the time that will be used for this substep
         current_time = last_substep_time + delta_time;
