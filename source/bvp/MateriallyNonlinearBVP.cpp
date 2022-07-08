@@ -306,6 +306,8 @@ SolveTimeStepResult MateriallyNonlinearBVP::solve_next_time_step(BVPData& bvp_da
         assembler.queue_assembly(finite_element::FEMatricesAndVectors::Flags::CompleteRHSVector,
                                  &residual);
         assembler.execute(local_solution, dof_maps);
+        residual.dot(-1); // accounts for wrong since for now (just a hack)
+        // still missing the external force part
         // TODO implement residual = "external force vector" - "internal force vector"
     };
 
