@@ -91,8 +91,9 @@ void MateriallyNonlinearBVP::init_lin_algebra(BVPData& bvp_data) const
     }
     if (!lin_alg.eigenstrain_force)
     {
-    lin_alg.eigenstrain_force = sparse_linear_algebra::LinAlgFactory::get().create_vector(dof_refs);
-    lin_alg.eigenstrain_force->allocate();
+        lin_alg.eigenstrain_force =
+          sparse_linear_algebra::LinAlgFactory::get().create_vector(dof_refs);
+        lin_alg.eigenstrain_force->allocate();
     }
     if (!lin_alg.eigenstrain_force_prev)
     {
@@ -127,13 +128,14 @@ void MateriallyNonlinearBVP::apply_boundary_conditions(BVPData& bvp_data) const
     for (auto& bc : bvp_data.bcs())
     {
         const auto scale_factor_function_index = bc->get_scale_factor_function_index();
-        auto bc_scale_factor                   = 0.0;
+        auto bc_scale_factor                   = 1.0;
         if (scale_factor_function_index != -1)
         {
+            auto& scale_function =
+              bvp_data.core_data.time_discr_data.scale_functions[scale_factor_function_index];
             const auto current_time = bvp_data.core_data.time_discr_data.current_time;
-            bc_scale_factor =
-              bvp_data.core_data.time_discr_data.scale_functions[scale_factor_function_index]
-                .get_scale_factor(current_time);
+            bc_scale_factor = scale_function.get_scale_factor(current_time) -
+                              scale_function.scale_factor_for_last_converged_substep;
         }
 
         // IMPORTANT NOTE: this assumes the field has # of components as dimensionality
@@ -337,6 +339,14 @@ SolveTimeStepResult MateriallyNonlinearBVP::solve_next_time_step(BVPData& bvp_da
 
         if (substep_converged)
         {
+            // Update the scale factors in the scale functions so we remember the last value for the
+            // calculation of the incremental scale factors.
+            for (auto& scale_function : bvp_data.core_data.time_discr_data.scale_functions)
+            {
+                scale_function.scale_factor_for_last_converged_substep =
+                  scale_function.get_scale_factor(current_time);
+            }
+
             last_substep_time = current_time;
 
             *lin_alg.solution_prev = *lin_alg.solution;

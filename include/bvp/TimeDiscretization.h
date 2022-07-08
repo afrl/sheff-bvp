@@ -26,6 +26,9 @@ struct ScaleFunction
     std::vector<double> times;
     // The y-axis of the scale function
     std::vector<double> scale_factors;
+    // Stores the last scale factor for the last converged substep in order to calculate the
+    // incremental scale factor (current - last value)
+    double scale_factor_for_last_converged_substep = 0.0;
 
     double get_scale_factor(double time)
     {

@@ -90,10 +90,6 @@ void DirichletBC::initialize(const finite_element::FiniteElementMesh& fe_mesh,
     }
 
     double constraint_value = scale_factor * opts_.value;
-    if (is_incremental)
-    {
-        constraint_value = 0.0;
-    }
 
     for (auto rank_dof : dofs_to_constrain)
     {
