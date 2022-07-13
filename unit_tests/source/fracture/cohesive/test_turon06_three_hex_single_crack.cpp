@@ -48,7 +48,7 @@ int main(int argc, char** argv)
 
     auto bvp = MateriallyNonlinearBVP::get();
     BVPData bvp_data;
-    bvp.set_input(mesh::make_linear_grid({ 0, 1, 2, 3 }, { 0, 1 }, { 0, 1, 2, 3 }),
+    bvp.set_input(mesh::make_linear_grid({ 0, 1, 2, 3 }, { 0, 1 }, { 0, 1 }),
                   get_test_name(__FILE__),
                   (get_output_directory(__FILE__) / "output").string(),
                   bvp_data);
@@ -56,7 +56,7 @@ int main(int argc, char** argv)
                          "InfinitesimalStrain",
                          "isotropic",
                          bvp_data);
-    add_unit_tension_x_z_bcs(bvp_data);
+    add_unit_tension_x_bcs(bvp_data);
 
     bvp.insert_precracks(bvp_data,
                          { { { 1.525, 0.2, 0.2 }, // point

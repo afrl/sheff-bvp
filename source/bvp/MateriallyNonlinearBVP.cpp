@@ -19,13 +19,33 @@ namespace bvp
 std::vector<sparse_linear_algebra::Vector*> MateriallyNonlinearLinearAlgebra::vectors() const
 {
     std::vector<sparse_linear_algebra::Vector*> non_null_vector_ptrs;
+    if (delta_solution != nullptr)
+    {
+        non_null_vector_ptrs.push_back(delta_solution.get());
+    }
+    if (solution != nullptr)
+    {
+        non_null_vector_ptrs.push_back(solution.get());
+    }
+    if (solution_prev != nullptr)
+    {
+        non_null_vector_ptrs.push_back(solution_prev.get());
+    }
     if (eigenstrain_force != nullptr)
     {
         non_null_vector_ptrs.push_back(eigenstrain_force.get());
     }
+    if (eigenstrain_force_prev != nullptr)
+    {
+        non_null_vector_ptrs.push_back(eigenstrain_force_prev.get());
+    }
     if (rhs != nullptr)
     {
         non_null_vector_ptrs.push_back(rhs.get());
+    }
+    if (rhs_prev != nullptr)
+    {
+        non_null_vector_ptrs.push_back(rhs_prev.get());
     }
     return non_null_vector_ptrs;
 }
@@ -134,7 +154,7 @@ void MateriallyNonlinearBVP::apply_boundary_conditions(BVPData& bvp_data) const
             auto& scale_function =
               bvp_data.core_data.time_discr_data.scale_functions[scale_factor_function_index];
             const auto current_time = bvp_data.core_data.time_discr_data.current_time;
-            bc_scale_factor = scale_function.get_scale_factor(current_time) -
+            bc_scale_factor         = scale_function.get_scale_factor(current_time) -
                               scale_function.scale_factor_for_last_converged_substep;
         }
 
@@ -260,9 +280,36 @@ void MateriallyNonlinearBVP::insert_precracks(
     }
 }
 
+void MateriallyNonlinearBVP::renumber_dofs(BVPData& bvp_data) const
+{
+    if (bvp_data.dof_manager().requires_renumber(bvp_data.fe_mesh()))
+    {
+        auto new_to_old_dof_clone_map =
+          bvp_data.dof_manager().renumber(bvp_data.fe_mesh(),
+                                          bvp_data.adjacency_list(),
+                                          bvp_data.element_scatter_map());
+
+        auto& lin_alg = static_cast<MateriallyNonlinearLinearAlgebra&>(*bvp_data.gl_lin_alg);
+        for (auto& v : lin_alg.vectors())
+        {
+            v->update_for_renumbering(new_to_old_dof_clone_map);
+        }
+        for (auto& m : lin_alg.matrices())
+        {
+            m->update_for_renumbering(new_to_old_dof_clone_map);
+        }
+
+        // Update the local copy of the solution after renumbering in case element parts are needed
+        // during an assembly
+        lin_alg.solution->update_local_array(bvp_data.solution());
+    }
+}
+
 SolveTimeStepResult MateriallyNonlinearBVP::solve_next_time_step(BVPData& bvp_data) const
 {
     init_all_data(bvp_data);
+
+    renumber_dofs(bvp_data);
 
     auto& time_discr_data = bvp_data.core_data.time_discr_data;
 
@@ -296,19 +343,23 @@ SolveTimeStepResult MateriallyNonlinearBVP::solve_next_time_step(BVPData& bvp_da
         assembler.queue_assembly(finite_element::FEMatricesAndVectors::Flags::LHSMatrix, &A);
         assembler.execute(local_solution, dof_maps);
     };
+    int callback_i = 0;
     std::function<void(const sparse_linear_algebra::Vector&, sparse_linear_algebra::Vector&)>
-      residual_functor =
-        [&local_solution, &assembler, &dof_maps](const sparse_linear_algebra::Vector& solution,
-                                                 sparse_linear_algebra::Vector& residual)
+      residual_functor = [&local_solution, &assembler, &dof_maps, &bvp_data, &ts_dir, &callback_i](
+                           const sparse_linear_algebra::Vector& solution,
+                           sparse_linear_algebra::Vector& residual)
     {
         solution.update_local_array(local_solution);
         // Note: this calculates the "internal force vector"
         assembler.queue_assembly(finite_element::FEMatricesAndVectors::Flags::CompleteRHSVector,
                                  &residual);
         assembler.execute(local_solution, dof_maps);
-        residual.dot(-1); // accounts for wrong since for now (just a hack)
+        // TODO implement residual = "internal force vector" (Ax) - "external force vector" (b)
         // still missing the external force part
-        // TODO implement residual = "external force vector" - "internal force vector"
+
+        // Debug hack TODO delete
+        save_bvp_data_json(bvp_data,
+                           (ts_dir / ("it_" + std::to_string(callback_i++))).generic_string());
     };
 
     // Note that these are references
@@ -326,18 +377,22 @@ SolveTimeStepResult MateriallyNonlinearBVP::solve_next_time_step(BVPData& bvp_da
         // Initialize boundary conditions
         apply_boundary_conditions(bvp_data);
 
+
+
         // try to solve nonlinear problem
         bool substep_converged = false;
         sparse_linear_algebra::NonLinearSolverParameters nl_params; // TODO set this via input file
-        auto status       = sparse_linear_algebra::nonlinear_solve(nl_params,
+        nl_params.abs_residual_normal_tol = 1e-6;
+        auto status                       = sparse_linear_algebra::nonlinear_solve(nl_params,
                                                              lin_alg.solution_prev.get(),
                                                              *lin_alg.sparse_solver,
                                                              lin_alg.stiffness.get(),
+                                                             lin_alg.constraint_matrix.get(),
                                                              lin_alg.rhs.get(),
                                                              lin_alg.delta_solution.get(),
                                                              tangent_matrix_functor,
                                                              residual_functor);
-        substep_converged = status.integral_stats["converged"] == 1;
+        substep_converged                 = status.integral_stats["converged"] == 1;
 
         if (substep_converged)
         {
@@ -353,6 +408,7 @@ SolveTimeStepResult MateriallyNonlinearBVP::solve_next_time_step(BVPData& bvp_da
 
             *lin_alg.solution_prev = *lin_alg.solution;
             *lin_alg.solution      = *lin_alg.delta_solution + *lin_alg.solution_prev;
+            lin_alg.solution->update_local_array(bvp_data.solution());
 
             /// update the internal state variables (overwritting the
             /// internal state variables for the last converged time step)
@@ -379,6 +435,17 @@ SolveTimeStepResult MateriallyNonlinearBVP::solve_next_time_step(BVPData& bvp_da
     }
 
     sparse_linear_algebra::LinAlgFactory::get().end_current_log_stage();
+
+    /*
+    if (BVPGlobalOptions::get().save_global_matrices)
+    {
+        gl_stiffness.save((ts_dir / "matrix_post_constraints.bin").generic_string());
+        gl_rhs.save((ts_dir / "rhs_post_constraints.bin").generic_string());
+        gl_displacement.save((ts_dir / "solution.bin").generic_string());
+    }
+    */
+
+    save_bvp_data(bvp_data, (ts_dir / "converged").generic_string());
 
     return { true, /* converged */
              time_discr_data.current_time ==

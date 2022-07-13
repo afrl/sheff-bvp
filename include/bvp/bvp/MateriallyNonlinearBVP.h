@@ -69,6 +69,10 @@ class MateriallyNonlinearBVP : public BoundaryValueProblem
     /// Modifies the constraint matrix and appropriate vectors in bvp_data.gl_lin_alg.
     virtual void apply_boundary_conditions(BVPData& bvp_data) const override;
 
+    /// @brief If enrichment has occurred, this renumbers the DoFs to satisfy the needs of the
+    /// solvers and enforce continuity across rank boundaries.
+    void renumber_dofs(BVPData& bvp_data) const;
+
     // TODO - again deal with combining FractureBVP
     xfem::Params get_xfem_params(BVPData& bvp_data) const;
 };
