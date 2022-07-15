@@ -315,7 +315,6 @@ SolveTimeStepResult MateriallyNonlinearBVP::solve_next_time_step(BVPData& bvp_da
 
     auto current_time_step   = time_discr_data.last_converged_time_step + 1;
     double target_time       = time_discr_data.target_times[current_time_step];
-    double last_substep_time = time_discr_data.last_converged_time;
 
     // Create a directory for the current time step
     auto ts_dir = bvp_data.output_dir() / ("ts_" + std::to_string(current_time_step));
@@ -362,13 +361,25 @@ SolveTimeStepResult MateriallyNonlinearBVP::solve_next_time_step(BVPData& bvp_da
                            (ts_dir / ("it_" + std::to_string(callback_i++))).generic_string());
     };
 
-    // Note that these are references
-    double& delta_time   = time_discr_data.current_delta_time;
+    // Note: that these are references
+    // For the first step, the value of this does not matter. For subsequent steps, it will be
+    // delta_time corresponding to the last converged substep (which could be small if convergence
+    // was not achieved and a cutback took place).
+    double& delta_time = time_discr_data.current_delta_time;
+    // The current time will be the time of the last converged step at this point. It is updated
+    // inside the while loop below.
     double& current_time = time_discr_data.current_time;
-    while (last_substep_time != target_time)
+
+    // Make sure we do not overshoot the next target time
+    if ((target_time - current_time) < delta_time)
+    {
+        delta_time = target_time - current_time;
+    }
+
+    while (time_discr_data.last_converged_time != target_time)
     {
         // Figure out the time that will be used for this substep
-        current_time = last_substep_time + delta_time;
+        current_time = time_discr_data.last_converged_time + delta_time;
         if (current_time > target_time)
         {
             current_time = target_time;
@@ -376,8 +387,6 @@ SolveTimeStepResult MateriallyNonlinearBVP::solve_next_time_step(BVPData& bvp_da
 
         // Initialize boundary conditions
         apply_boundary_conditions(bvp_data);
-
-
 
         // try to solve nonlinear problem
         bool substep_converged = false;
@@ -404,7 +413,9 @@ SolveTimeStepResult MateriallyNonlinearBVP::solve_next_time_step(BVPData& bvp_da
                   scale_function.get_scale_factor(current_time);
             }
 
-            last_substep_time = current_time;
+            // Update time data
+            time_discr_data.last_converged_time = current_time;
+            time_discr_data.last_converged_time_step++;
 
             *lin_alg.solution_prev = *lin_alg.solution;
             *lin_alg.solution      = *lin_alg.delta_solution + *lin_alg.solution_prev;
