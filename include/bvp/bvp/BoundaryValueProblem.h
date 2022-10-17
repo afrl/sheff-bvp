@@ -4,13 +4,24 @@
 #include "bvp/Defines.h"
 #include "finite_element/hhe_primitives/BasalFieldSelection.h"
 
+#include <vector>
+
 namespace bvp
 {
+
+struct SubstepResult
+{
+    bool converged = false;
+    double time    = 0.0;
+    sparse_linear_algebra::SolverStatus solver_status;
+};
+
 // @brief Simple class describing a result of calling BoundaryValueProblem::solve_next_time_step.
 struct SolveTimeStepResult
 {
     bool converged         = false;
     bool end_of_time_steps = false;
+    std::vector<SubstepResult> substep_results;
 };
 
 /// @brief General base class for all types of boundary value problems.

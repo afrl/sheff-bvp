@@ -32,12 +32,12 @@ struct OffsetInformation
 
 BVPCoreData::BVPCoreData(BVPCoreData&& other) noexcept
 {
-    output_dir          = std::move(other.output_dir);
-    time_discr_data     = std::move(other.time_discr_data);
-    fe_mesh             = std::move(other.fe_mesh);
-    dof_manager         = std::move(other.dof_manager);
-    boundary_conditions = std::move(other.boundary_conditions);
-    solution            = std::move(other.solution);
+    output_dir               = std::move(other.output_dir);
+    time_discr_data          = std::move(other.time_discr_data);
+    fe_mesh                  = std::move(other.fe_mesh);
+    dof_manager              = std::move(other.dof_manager);
+    boundary_conditions      = std::move(other.boundary_conditions);
+    solution                 = std::move(other.solution);
     enrichment_surfaces_data = std::move(other.enrichment_surfaces_data);
 }
 
@@ -136,6 +136,11 @@ void save_bvp_data(const BVPData& bvp_data, const std::string filestem)
       (filestem_fs.parent_path() / filestem_fs.stem()).generic_string();
     std::string binary_path = filestem_sanitized + ".bvp.bin";
     std::string json_path   = filestem_sanitized + ".bvp.json";
+
+    if (!fs::exists(filestem_fs.parent_path()))
+    {
+        fs::create_directory(filestem_fs.parent_path());
+    }
 
     // Count how many bytes will be needed for the serialized data by rank
     utility::SerialByteCounter byte_counter;

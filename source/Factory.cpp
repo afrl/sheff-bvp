@@ -1,5 +1,6 @@
 #include "bvp/Factory.h"
 
+#include "bvp/bvp/MateriallyNonlinearBVP.h"
 #include "bvp/bvp/FractureBVP.h"
 #include "bvp/bvp/LinearElasticBVP.h"
 #include "utility/StringUtils.h"
@@ -18,6 +19,11 @@ BoundaryValueProblem& bvp_factory(const std::string& analysis_type,
              utility::istr_is_equal(kinematics_type, "infinitesimal_strain"))
     {
         return FractureBVP::get();
+    }
+    else if (utility::istr_is_equal(analysis_type, "static_elasticity_nonlinear") &&
+             utility::istr_is_equal(kinematics_type, "infinitesimal_strain"))
+    {
+        return MateriallyNonlinearBVP::get();
     }
     throw _UTIL_MSG_EXCEPT("Could not create an analysis of type " + analysis_type +
                            " with kinematics " + kinematics_type);

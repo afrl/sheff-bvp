@@ -17,17 +17,14 @@ struct BVPCoreData
     std::string bvp_name;
     fs::path output_dir;
     TimeDiscretizationData time_discr_data;
-    /// this vector can change if we add additional steps for convergence
-    std::vector<double> load_steps;
-    std::vector<double> load_steps_init;
-    /// this vector is given
     sparse_linear_algebra::SparseSolverOptions solver_opts;
+    sparse_linear_algebra::NonLinearSolverOpts nonlinear_solver_opts;
 
     finite_element::FiniteElementMesh fe_mesh;
     dof_manager::DofManager dof_manager;
     std::vector<std::unique_ptr<BoundaryCondition>> boundary_conditions;
     /// Current solution vector from the last linear algebra solve for the owned and ghost DoFs
-    /// on this rank.  This is updated each solve, which means it may not be the converged solution
+    /// on this rank. This is updated each solve, which means it may not be the converged solution
     /// for nonlinear problems. The order of DoFs follows the local indices of the DoF map.
     std::vector<double> solution;
     std::vector<xfem::EnrichmentSurfaceData> enrichment_surfaces_data;
@@ -91,7 +88,7 @@ struct BVPData
     {
         return core_data.output_dir;
     }
-    
+
     inline auto& output_dir() const
     {
         return core_data.output_dir;

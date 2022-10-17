@@ -88,6 +88,9 @@ void DirichletBC::initialize(const finite_element::FiniteElementMesh& fe_mesh,
             }
         }
     }
+    _UTIL_ASSERT(!dofs_to_constrain.empty(),
+                 "Boundary condition applied to " + node_group_name_ +
+                   " did not result in any constraints. Check the boundary conditions.");
 
     double constraint_value = scale_factor * opts_.value;
 

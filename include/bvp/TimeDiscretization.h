@@ -56,6 +56,30 @@ struct ScaleFunction
             return scale_factors.back();
         }
     }
+
+
+    template<typename SerializerType>
+    void serialize(SerializerType& s) const
+    {
+        s(utility::named_ref("name", name),
+          utility::named_value("n_times", times.size()),
+          utility::named_value("times", utility::slice_c(times)),
+          utility::named_value("n_scale_factors", scale_factors.size()),
+          utility::named_value("scale_factors", utility::slice_c(scale_factors)),
+          utility::named_ref("scale_factor_for_last_converged_substep",
+                             scale_factor_for_last_converged_substep));
+    }
+
+    template<typename SerializerType>
+    void deserialize(SerializerType& s)
+    {
+        std::size_t n_times, n_scale_factors;
+        s(name, n_times);
+        times.resize(n_times);
+        s(utility::slice(times), n_scale_factors);
+        scale_factors.resize(n_scale_factors);
+        s(utility::slice(scale_factors), scale_factor_for_last_converged_substep);
+    }
 };
 
 /// Note: this struct needs to be expanded for psuedotime/time problems
@@ -95,8 +119,10 @@ struct TimeDiscretizationData
           utility::named_ref("last_converged_time", last_converged_time),
           utility::named_ref("current_delta_time", current_delta_time),
           utility::named_ref("current_time", current_time),
-          /* TODO write target_times */
-          /* TODO write scale_functions */
+          utility::named_value("n_target_times", target_times.size()),
+          utility::named_value("target_times", utility::slice_c(target_times)),
+          utility::named_value("n_scale_functions", scale_functions.size()),
+          utility::named_value("scale_functions", utility::slice_c(scale_functions)),
           utility::named_ref("n_consecutive_converged_substeps", n_consecutive_converged_substeps),
           utility::named_ref("n_consecutive_substeps_before_increase",
                              n_consecutive_substeps_before_increase),
@@ -107,13 +133,19 @@ struct TimeDiscretizationData
     template<typename SerializerType>
     void deserialize(SerializerType& s)
     {
-        s(last_converged_time_step,
-          last_converged_time,
-          current_delta_time,
-          current_time,
-          /* TODO write target_times */
-          /* TODO write scale_functions */
-          n_consecutive_converged_substeps,
+        s(last_converged_time_step, last_converged_time, current_delta_time, current_time);
+        
+        std::size_t n_target_times;
+        s(n_target_times);
+        target_times.resize(n_target_times);
+        s(utility::slice(target_times));
+
+        std::size_t n_scale_functions;
+        s(n_scale_functions);
+        scale_functions.resize(n_scale_functions);
+        s(utility::slice(scale_functions));
+        
+        s(n_consecutive_converged_substeps,
           n_consecutive_substeps_before_increase,
           cutback_factor,
           accelerate_factor);

@@ -5,7 +5,6 @@
 #include "sparse_linear_algebra/SparseMatrix.h"
 #include "sparse_linear_algebra/SparseSolver.h"
 #include "sparse_linear_algebra/Vector.h"
-//#include "bvp/TimeDiscretization.h"
 
 #include <memory>
 #include <vector>
@@ -49,6 +48,16 @@ class MateriallyNonlinearBVP : public BoundaryValueProblem
     /// via the direction criterion and growth criterion that were assigned to the elements.
     void insert_precracks(BVPData& bvp_data,
                           const std::vector<SurfaceInitiationAtPoint>& initations) const;
+
+    /// Insert precracks along implicit functions that define the surface (where the functions
+    /// equals 0).  This method differs from insert_precracks_by_function in that it only
+    /// inserts a surface where the sign of previously inserted surfaces (in the vector) are
+    /// positive.  For example, if the first function defines a sphere with the normal pointing
+    /// outward and the second function defines a plane intersecting the sphere, then a surface
+    /// will only be inserted outside the sphere.
+    void insert_precracks_by_function_outside_previous(
+      BVPData& bvp_data,
+      const std::vector<SurfaceInsertionByLevelSet>& insertions) const;
 
 
     /// @brief Solves the next time step for the boundary value problem, if there any remaining.

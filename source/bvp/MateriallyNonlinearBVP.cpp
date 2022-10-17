@@ -1,5 +1,7 @@
 #include "bvp/bvp/MateriallyNonlinearBVP.h"
 
+#include "constitutive/enrichment/direction_criteria/MaxPrincipalStressDirectionCriterion.h"
+#include "constitutive/enrichment/growth_criteria/AlwaysGrowGrowthCriterion.h"
 #include "finite_element/FiniteElement.h"
 #include "finite_element/ModelSelectionHelper.h"
 #include "finite_element/hhe_primitives/PrimitiveAlgorithms.h"
@@ -305,6 +307,73 @@ void MateriallyNonlinearBVP::renumber_dofs(BVPData& bvp_data) const
     }
 }
 
+void MateriallyNonlinearBVP::insert_precracks_by_function_outside_previous(
+  BVPData& bvp_data,
+  const std::vector<SurfaceInsertionByLevelSet>& insertions) const
+{
+    init_all_data(bvp_data);
+
+    auto& enrichment_surfaces_data = bvp_data.enrichment_surfaces_data();
+    auto xfem_param                = get_xfem_params(bvp_data);
+
+    auto always_grow_ref =
+      constitutive::ensure_growth_criterion("always_grow",
+                                            constitutive::AlwaysGrowGrowthCriterion());
+    auto max_prin_dir_ref = constitutive::ensure_direction_criterion(
+      "max_prin_stress",
+      constitutive::MaxPrincipalStressDirectionCriterion());
+
+    auto& selection_helper = finite_element::ModelSelectionHelper::get();
+    for (auto i : utility::indices(insertions))
+    {
+        auto& insertion = insertions[i];
+
+        auto surface_model = selection_helper.create_enrichment_surface_model("InfinitesimalStrain",
+                                                                              insertion.properties,
+                                                                              always_grow_ref,
+                                                                              max_prin_dir_ref);
+
+        enrichment_surfaces_data.push_back(xfem::insert_surface_based_on_level_set(
+          xfem_param,
+          surface_model.enrichment_model,
+          surface_model.pointwise_enrichment_model_data,
+          insertion.level_set_function,
+          [&insertions, &i](const finite_element::FiniteElementConstAccessor& curr_fe,
+                            const finite_element::LeafIndex& leaf_index,
+                            const simple_math::Point& p) -> bool
+          {
+              // If the element is not enriched, then ensure it on the side of all of the level-sets
+              if (curr_fe.layout.get_n_enrichments() == 0)
+              {
+                  for (auto j : utility::range(i))
+                  {
+                      if (insertions[j].level_set_function(p) <= 0.0)
+                      {
+                          return false;
+                      }
+                  }
+                  return true;
+              }
+              else
+              {
+                  return finite_element::does_all_ancestors_match_field_sign(
+                    curr_fe,
+                    leaf_index,
+                    finite_element::FieldSign::Pos);
+              }
+          },
+          false,
+          insertion.properties_for_fields_on_neg_side));
+        xfem::update_surface_ids(xfem_param, enrichment_surfaces_data);
+
+        xfem::write_level_sets_to_vtk(enrichment_surfaces_data,
+                                      xfem_param,
+                                      "./",
+                                      enrichment_surfaces_data.back().global_surface_id, // step #
+                                      0); // substep #
+    }
+}
+
 SolveTimeStepResult MateriallyNonlinearBVP::solve_next_time_step(BVPData& bvp_data) const
 {
     init_all_data(bvp_data);
@@ -313,8 +382,8 @@ SolveTimeStepResult MateriallyNonlinearBVP::solve_next_time_step(BVPData& bvp_da
 
     auto& time_discr_data = bvp_data.core_data.time_discr_data;
 
-    auto current_time_step   = time_discr_data.last_converged_time_step + 1;
-    double target_time       = time_discr_data.target_times[current_time_step];
+    auto current_time_step = time_discr_data.last_converged_time_step + 1;
+    double target_time     = time_discr_data.target_times[current_time_step];
 
     // Create a directory for the current time step
     auto ts_dir = bvp_data.output_dir() / ("ts_" + std::to_string(current_time_step));
@@ -349,6 +418,7 @@ SolveTimeStepResult MateriallyNonlinearBVP::solve_next_time_step(BVPData& bvp_da
                            sparse_linear_algebra::Vector& residual)
     {
         solution.update_local_array(local_solution);
+
         // Note: this calculates the "internal force vector"
         assembler.queue_assembly(finite_element::FEMatricesAndVectors::Flags::CompleteRHSVector,
                                  &residual);
@@ -356,9 +426,15 @@ SolveTimeStepResult MateriallyNonlinearBVP::solve_next_time_step(BVPData& bvp_da
         // TODO implement residual = "internal force vector" (Ax) - "external force vector" (b)
         // still missing the external force part
 
-        // Debug hack TODO delete
-        save_bvp_data_json(bvp_data,
-                           (ts_dir / ("it_" + std::to_string(callback_i++))).generic_string());
+        // TODO user should be able to decide if iterations should be
+        {
+            // Save the BVP data with the current iteration solution
+            bvp_data.core_data.solution.swap(local_solution);
+            auto iteration_dir_name = "it_" + std::to_string(callback_i++);
+            save_bvp_data(bvp_data,
+                          (ts_dir / iteration_dir_name / "iteration_state").generic_string());
+            bvp_data.core_data.solution.swap(local_solution);
+        }
     };
 
     // Note: that these are references
@@ -375,7 +451,11 @@ SolveTimeStepResult MateriallyNonlinearBVP::solve_next_time_step(BVPData& bvp_da
     {
         delta_time = target_time - current_time;
     }
+    _UTIL_ASSERT(delta_time > 0,
+                 "Somehow the logic resulted in a time increment of 0, which would result in an "
+                 "infinite loop.")
 
+    std::vector<SubstepResult> substep_results;
     while (time_discr_data.last_converged_time != target_time)
     {
         // Figure out the time that will be used for this substep
@@ -390,18 +470,20 @@ SolveTimeStepResult MateriallyNonlinearBVP::solve_next_time_step(BVPData& bvp_da
 
         // try to solve nonlinear problem
         bool substep_converged = false;
-        sparse_linear_algebra::NonLinearSolverParameters nl_params; // TODO set this via input file
-        nl_params.abs_residual_normal_tol = 1e-6;
-        auto status                       = sparse_linear_algebra::nonlinear_solve(nl_params,
-                                                             lin_alg.solution_prev.get(),
-                                                             *lin_alg.sparse_solver,
-                                                             lin_alg.stiffness.get(),
-                                                             lin_alg.constraint_matrix.get(),
-                                                             lin_alg.rhs.get(),
-                                                             lin_alg.delta_solution.get(),
-                                                             tangent_matrix_functor,
-                                                             residual_functor);
-        substep_converged                 = status.integral_stats["converged"] == 1;
+        auto status =
+          sparse_linear_algebra::nonlinear_solve(bvp_data.core_data.nonlinear_solver_opts,
+                                                 lin_alg.solution_prev.get(),
+                                                 *lin_alg.sparse_solver,
+                                                 lin_alg.stiffness.get(),
+                                                 lin_alg.constraint_matrix.get(),
+                                                 lin_alg.rhs.get(),
+                                                 lin_alg.delta_solution.get(),
+                                                 tangent_matrix_functor,
+                                                 residual_functor);
+        substep_converged = status.integral_stats["converged"] == 1;
+
+        // Debug override converged check TODO delete
+        substep_converged = true;
 
         if (substep_converged)
         {
@@ -443,6 +525,8 @@ SolveTimeStepResult MateriallyNonlinearBVP::solve_next_time_step(BVPData& bvp_da
             time_discr_data.n_consecutive_converged_substeps = 0;
             delta_time /= 2.0;
         }
+
+        substep_results.push_back({ substep_converged, current_time, status });
     }
 
     sparse_linear_algebra::LinAlgFactory::get().end_current_log_stage();
@@ -460,7 +544,8 @@ SolveTimeStepResult MateriallyNonlinearBVP::solve_next_time_step(BVPData& bvp_da
 
     return { true, /* converged */
              time_discr_data.current_time ==
-               time_discr_data.target_times.back() /* done with time steps */ };
+               time_discr_data.target_times.back() /* done with time steps */,
+             substep_results };
 }
 
 xfem::Params MateriallyNonlinearBVP::get_xfem_params(BVPData& bvp_data) const
