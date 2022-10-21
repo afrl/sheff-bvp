@@ -506,7 +506,7 @@ SolveTimeStepResult MateriallyNonlinearBVP::solve_next_time_step(BVPData& bvp_da
             /// update the internal state variables (overwritting the
             /// internal state variables for the last converged time step)
             assembler.queue_operation(
-              [](finite_element::FiniteElement::ConstParams& params,
+              [](finite_element::FiniteElement::ConstParams params,
                  finite_element::FiniteElementAccessor& fe)
               { finite_element::FiniteElement::update_converged_isvs(params, fe.layout); });
             lin_alg.solution->update_local_array(local_solution);

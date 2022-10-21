@@ -12,7 +12,7 @@ class BoundaryCondition
 {
   public:
     BoundaryCondition() {}
-    ~BoundaryCondition() {}
+    virtual ~BoundaryCondition() {}
 
     /// @brief Returns an enumeraiton indicating what concrete type of BC this object is.
     ///
