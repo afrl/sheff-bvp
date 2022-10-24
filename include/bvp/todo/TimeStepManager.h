@@ -110,7 +110,7 @@ namespace bvp
         StaticAnalysisTimeStepManager();
 
         /// Restarts any iteration loops.
-        virtual void start_time_step_loop();
+        virtual void start_time_step_loop() override;
         /// Just returns false since there is only one step for a static analysis.
         virtual bool next_time_step() override;
         /// See TimeStepManager::next_iteration
