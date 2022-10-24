@@ -1,4 +1,4 @@
-#include "../UnitTestHelpers.h"
+#include "../../UnitTestHelpers.h"
 #include "bvp/bvp/FractureBVP.h"
 #include "constitutive/enrichment/deformation/traction_free/TractionFreeInterfaceProperties.h"
 #include "constitutive/field/deformation/linear_elasticity/LinearElasticProperties.h"
