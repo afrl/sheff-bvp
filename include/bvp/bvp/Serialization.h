@@ -29,6 +29,10 @@ void serialize(SerializerType& s, const bvp::BVPData& bvp_data)
     assert(bvp_data.core_data.dof_manager.get_dof_maps().n_dofs_on_rank() ==
            bvp_data.core_data.solution.size());
     s(utility::named_value("solution", utility::slice_c(bvp_data.core_data.solution)));
+
+    s(utility::named_value("residual_size", bvp_data.core_data.residual.size()));
+    s(utility::named_value("residual", utility::slice_c(bvp_data.core_data.residual)));
+
     s(utility::named_value("n_enrichment_surfaces",
                            bvp_data.core_data.enrichment_surfaces_data.size()),
       utility::named_value("enrichment_surfaces_data",
@@ -60,6 +64,11 @@ void deserialize(SerializerType& s, bvp::BVPData& bvp_data)
 
     bvp_data.core_data.solution.resize(bvp_data.dof_manager().get_dof_maps().n_dofs_on_rank());
     s(utility::slice(bvp_data.core_data.solution));
+
+    std::size_t residual_size = 0;
+    s(residual_size);
+    bvp_data.core_data.residual.resize(residual_size);
+    s(utility::slice(bvp_data.core_data.residual));
 
     std::size_t n_enrichment_surfaces = 0;
     s(n_enrichment_surfaces);

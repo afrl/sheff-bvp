@@ -27,6 +27,8 @@ struct BVPCoreData
     /// on this rank. This is updated each solve, which means it may not be the converged solution
     /// for nonlinear problems. The order of DoFs follows the local indices of the DoF map.
     std::vector<double> solution;
+    /// Stored for debugging.  TODO evaluate if we should always store it?
+    std::vector<double> residual;
     std::vector<xfem::EnrichmentSurfaceData> enrichment_surfaces_data;
 
     BVPCoreData() = default;
