@@ -433,6 +433,10 @@ SolveTimeStepResult MateriallyNonlinearBVP::solve_next_time_step(BVPData& bvp_da
             auto iteration_dir_name = "it_" + std::to_string(callback_i++);
             save_bvp_data(bvp_data,
                           (ts_dir / iteration_dir_name / "iteration_state").generic_string());
+
+            save_bvp_data_json(bvp_data,
+                               (ts_dir / iteration_dir_name / "iteration_state").generic_string());
+
             bvp_data.core_data.solution.swap(local_solution);
         }
     };
