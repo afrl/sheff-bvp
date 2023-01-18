@@ -184,12 +184,12 @@ struct BVPData
 };
 
 /// @brief Queries how many ranks were running for BVPData saved to the given file.
-/// @param filename - name of the file to load (extension will be ignored if given)
+/// @param filestem - name of the file to load (extension will be ignored if given)
 /// @return Number of ranks that saved the data.
 int query_n_ranks_for_bvp_data(const std::string filestem);
 
 /// @brief Load a binary serialization of a BVPData object in the given file.
-/// @param filename - name of the file to load (extension will be ignored if given)
+/// @param filestem - name of the file to load (extension will be ignored if given)
 ///
 /// Note: if the BVPData was saved while distributed, then it is required that the current number of
 /// ranks match how many were running when it was saved.  In this case, this loads the data
@@ -197,7 +197,7 @@ int query_n_ranks_for_bvp_data(const std::string filestem);
 BVPData load_bvp_data(const std::string filestem);
 
 /// @brief Load a binary serialization of a BVPData object in the given file.
-/// @param filename - name of the file to load (extension will be ignored if given)
+/// @param filestem - name of the file to load (extension will be ignored if given)
 /// @param rank_to_load - the corresponding rank for which to load the saved BVPData
 ///
 /// Note: As opposed to the other load_bvp_data calls, this does not require the current number of
@@ -214,6 +214,7 @@ BVPData load_bvp_data(const std::string filestem, int rank_to_load);
 void save_bvp_data(const BVPData& bvp_data, const std::string filestem);
 
 /// @brief Write a JSON serialization of the given bvp_data to a text file with the given name.
+/// @param bvp_data - data to save
 /// @param filestem - name of the file without an extension (can be a path relative to the CWD)
 ///
 /// Note: if distributed, then each rank will write to its own text file "<filestem>_<rank id>.txt",

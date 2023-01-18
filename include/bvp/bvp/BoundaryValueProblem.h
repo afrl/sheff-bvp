@@ -39,18 +39,19 @@ class BoundaryValueProblem
 
     /// Sets the input for the analysis, reads the input mesh (and any groups or data
     /// assocciated with it).
-    /// \param input_script_path - the path to input script is used for information
+    /// @param input_script_path - the path to input script is used for information
     ///        in the output meta file.  The file is not accessed by this method.
-    /// \param input_meta_file_path - the path to the input meta file that contains the
+    /// @param input_meta_file_path - the path to the input meta file that contains the
     ///        the mesh, groups, and input data.  For an analysis from the start, this
     ///        should be the path to the file created by the preprocessor, but for a
     ///        restart, it should be the output meta file that is being restarted.
     ///        Note: the mesh, groups, and input data will be copied to the output
     ///        directory.  This ensures that the output directory is self-contained, but
     ///        does come at a cost of hard disk space.
-    /// \param output_dir_path - the path to the output directory.  This can be a relative
+    /// @param output_dir_path - the path to the output directory.  This can be a relative
     ///        path but should be relative to the current working directory.  If the
     ///        directory does not exist yet, it will be created.
+    /// @param bvp_data - BVP data to modify
     void set_input(const std::string input_script_path,
                    const std::string input_meta_file_path,
                    const std::string output_dir_path,
@@ -59,10 +60,12 @@ class BoundaryValueProblem
     /// Sets input for the analysis, similar to the other set_input() method, but
     /// this method sets the mesh object directory and is intended for unit tests
     /// or scripts that create the mesh on the fly.
-    /// \param mesh - the input mesh to use for the analysis
-    /// \param output_dir_path - the path to the output directory.  This can be a relative
+    /// @param mesh - the input mesh to use for the analysis
+    /// @param analysis_name - a name for the analysis (used for post-processing)
+    /// @param output_dir_path - the path to the output directory.  This can be a relative
     ///        path but should be relative to the current working directory.  If the
     ///        directory does not exist yet, it will be created.
+    /// @param bvp_data - BVP data to modify
     void set_input(mesh::Mesh&& mesh,
                    const std::string analysis_name,
                    const std::string output_dir_path,
@@ -74,16 +77,17 @@ class BoundaryValueProblem
     /// all model data.  The combination of objects that compose the model is determined
     /// based on the combination fo the formulation and properties given.
     ///
-    /// \param selection - the selection object that will return the basal fields to assign
+    /// @param selection - the selection object that will return the basal fields to assign
     ///        a field model to based on the other given options.
-    /// \param formulation_name - valid options for formulations currently include:
+    /// @param formulation_name - valid options for formulations currently include:
     ///        - "InfinitesimalStrain"
-    /// \param properties - the properties to be assigned to the basal fields.  This
+    /// @param properties_name - the properties to be assigned to the basal fields.  This
     ///        analysis object makes a deep copy of the properties to ensure it will
     ///        be persistent throughout the analysis.  A copy is created for each call,
     ///        so be cognizant that calling this method many times with the same properties
     ///        object will be far less memory-efficient than calling it once with a more
     ///        complex selection.
+    /// @param bvp_data - BVP data to modify
     void set_field_models(finite_element::BasalFieldSelection selection,
                           const std::string& formulation_name,
                           const std::string& properties_name,
