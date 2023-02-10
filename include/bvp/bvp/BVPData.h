@@ -32,7 +32,7 @@ struct BVPCoreData
     std::vector<xfem::EnrichmentSurfaceData> enrichment_surfaces_data;
 
     BVPCoreData() = default;
-    BVPCoreData(BVPCoreData&&) noexcept;
+    BVPCoreData(BVPCoreData&&) noexcept = default;
 };
 
 /// @brief Data that can be recovered from BVPCoreData or set directly

@@ -21,6 +21,7 @@ struct MateriallyNonlinearLinearAlgebra final : public BVPLinearAlgebra
     std::unique_ptr<sparse_linear_algebra::Vector> eigenstrain_force_prev;
     std::unique_ptr<sparse_linear_algebra::Vector> rhs;
     std::unique_ptr<sparse_linear_algebra::Vector> rhs_prev;
+    std::unique_ptr<sparse_linear_algebra::Vector> residual;
     std::unique_ptr<sparse_linear_algebra::SparseMatrix> stiffness;
     std::unique_ptr<sparse_linear_algebra::ConstraintMatrix> constraint_matrix;
     std::unique_ptr<sparse_linear_algebra::SparseSolver> sparse_solver;

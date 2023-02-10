@@ -267,6 +267,12 @@ void BoundaryValueProblem::init_core_data(BVPData& bvp_data) const
                                            0);
     }
 
+    if (bvp_data.core_data.residual.empty())
+    {
+        bvp_data.core_data.residual.resize(bvp_data.dof_manager().get_dof_maps().n_dofs_on_rank(),
+                                           0);
+    }
+
     // Note: allocate_isvs will only allocate if the field does not already have ISV's allocated.
     for (auto fe_accessor : bvp_data.fe_mesh().finite_elements())
     {

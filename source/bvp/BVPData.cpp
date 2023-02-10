@@ -29,18 +29,6 @@ struct OffsetInformation
     }
 };
 
-
-BVPCoreData::BVPCoreData(BVPCoreData&& other) noexcept
-{
-    output_dir               = std::move(other.output_dir);
-    time_discr_data          = std::move(other.time_discr_data);
-    fe_mesh                  = std::move(other.fe_mesh);
-    dof_manager              = std::move(other.dof_manager);
-    boundary_conditions      = std::move(other.boundary_conditions);
-    solution                 = std::move(other.solution);
-    enrichment_surfaces_data = std::move(other.enrichment_surfaces_data);
-}
-
 BVPData::BVPData(BVPData&& other) noexcept
   : core_data(std::move(other.core_data))
   , secondary_data(std::move(other.secondary_data))
@@ -139,7 +127,7 @@ void save_bvp_data(const BVPData& bvp_data, const std::string filestem)
 
     if (!fs::exists(filestem_fs.parent_path()))
     {
-        fs::create_directory(filestem_fs.parent_path());
+        fs::create_directories(filestem_fs.parent_path());
     }
 
     // Count how many bytes will be needed for the serialized data by rank

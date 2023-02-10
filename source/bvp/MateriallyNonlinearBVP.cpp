@@ -49,6 +49,10 @@ std::vector<sparse_linear_algebra::Vector*> MateriallyNonlinearLinearAlgebra::ve
     {
         non_null_vector_ptrs.push_back(rhs_prev.get());
     }
+    if (residual != nullptr)
+    {
+        non_null_vector_ptrs.push_back(residual.get());
+    }
     return non_null_vector_ptrs;
 }
 
@@ -133,6 +137,11 @@ void MateriallyNonlinearBVP::init_lin_algebra(BVPData& bvp_data) const
         lin_alg.rhs_prev = sparse_linear_algebra::LinAlgFactory::get().create_vector(dof_refs);
         lin_alg.rhs_prev->allocate();
     }
+    if (!lin_alg.residual)
+    {
+        lin_alg.residual = sparse_linear_algebra::LinAlgFactory::get().create_vector(dof_refs);
+        lin_alg.residual->allocate();
+    }
 
     if (!lin_alg.sparse_solver)
     {
@@ -146,6 +155,7 @@ void MateriallyNonlinearBVP::init_lin_algebra(BVPData& bvp_data) const
 void MateriallyNonlinearBVP::apply_boundary_conditions(BVPData& bvp_data) const
 {
     auto& lin_alg = static_cast<MateriallyNonlinearLinearAlgebra&>(*bvp_data.gl_lin_alg);
+    lin_alg.constraint_matrix->clear();
 
     for (auto& bc : bvp_data.bcs())
     {
@@ -163,7 +173,7 @@ void MateriallyNonlinearBVP::apply_boundary_conditions(BVPData& bvp_data) const
         // IMPORTANT NOTE: this assumes the field has # of components as dimensionality
         // This works for displacement with solid elements, but reconsider what should
         // be done to handle scalar fields, shell elements, combined fields, etc.
-        // TODO figure out a robust term strategy for this
+        // TODO figure out a robust strategy for this
         bc->initialize(bvp_data.fe_mesh(),
                        bvp_data.node_to_element_map(),
                        bvp_data.dof_manager().get_dof_maps(),
@@ -304,6 +314,7 @@ void MateriallyNonlinearBVP::renumber_dofs(BVPData& bvp_data) const
         // Update the local copy of the solution after renumbering in case element parts are needed
         // during an assembly
         lin_alg.solution->update_local_array(bvp_data.solution());
+        lin_alg.residual->update_local_array(bvp_data.core_data.residual);
     }
 }
 
@@ -385,6 +396,9 @@ SolveTimeStepResult MateriallyNonlinearBVP::solve_next_time_step(BVPData& bvp_da
     auto current_time_step = time_discr_data.last_converged_time_step + 1;
     double target_time     = time_discr_data.target_times[current_time_step];
 
+    std::cout << "Time step " << current_time_step << " for target time " << target_time
+              << std::endl;
+
     // Create a directory for the current time step
     auto ts_dir = bvp_data.output_dir() / ("ts_" + std::to_string(current_time_step));
     if (!fs::exists(ts_dir))
@@ -402,6 +416,7 @@ SolveTimeStepResult MateriallyNonlinearBVP::solve_next_time_step(BVPData& bvp_da
     auto& assembler = bvp_data.assembler();
     auto& dof_maps  = bvp_data.dof_manager().get_dof_maps();
     std::vector<double> local_solution(dof_maps.n_dofs_on_rank(), 0.0);
+    std::vector<double> local_residual(dof_maps.n_dofs_on_rank(), 0.0);
     std::function<void(const sparse_linear_algebra::Vector&, sparse_linear_algebra::SparseMatrix&)>
       tangent_matrix_functor =
         [&local_solution, &assembler, &dof_maps](const sparse_linear_algebra::Vector& solution,
@@ -411,11 +426,19 @@ SolveTimeStepResult MateriallyNonlinearBVP::solve_next_time_step(BVPData& bvp_da
         assembler.queue_assembly(finite_element::FEMatricesAndVectors::Flags::LHSMatrix, &A);
         assembler.execute(local_solution, dof_maps);
     };
-    int callback_i = 0;
+
+    int substep_index = 0;
+    int iteration_index = 0;
     std::function<void(const sparse_linear_algebra::Vector&, sparse_linear_algebra::Vector&)>
-      residual_functor = [&local_solution, &assembler, &dof_maps, &bvp_data, &ts_dir, &callback_i](
-                           const sparse_linear_algebra::Vector& solution,
-                           sparse_linear_algebra::Vector& residual)
+      residual_functor = [&local_solution,
+                          &local_residual,
+                          &assembler,
+                          &dof_maps,
+                          &bvp_data,
+                          &ts_dir,
+                          &substep_index,
+                          &iteration_index](const sparse_linear_algebra::Vector& solution,
+                                          sparse_linear_algebra::Vector& residual)
     {
         solution.update_local_array(local_solution);
 
@@ -426,18 +449,28 @@ SolveTimeStepResult MateriallyNonlinearBVP::solve_next_time_step(BVPData& bvp_da
         // TODO implement residual = "internal force vector" (Ax) - "external force vector" (b)
         // still missing the external force part
 
+        residual.update_local_array(local_residual);
+
         // TODO user should be able to decide if iterations should be
         {
             // Save the BVP data with the current iteration solution
             bvp_data.core_data.solution.swap(local_solution);
-            auto iteration_dir_name = "it_" + std::to_string(callback_i++);
-            save_bvp_data(bvp_data,
-                          (ts_dir / iteration_dir_name / "iteration_state").generic_string());
+            bvp_data.core_data.residual.swap(local_residual);
 
+            auto substep_dir_name   = "substep_" + std::to_string(substep_index);
+            auto iteration_dir_name = "it_" + std::to_string(iteration_index++);
+            save_bvp_data(bvp_data,
+                          (ts_dir / substep_dir_name / iteration_dir_name / "iteration_state")
+                            .generic_string());
+
+            /* Expensive debugging!
             save_bvp_data_json(bvp_data,
-                               (ts_dir / iteration_dir_name / "iteration_state").generic_string());
+                               (ts_dir / substep_dir_name / iteration_dir_name / "iteration_state")
+                                 .generic_string());
+            */
 
             bvp_data.core_data.solution.swap(local_solution);
+            bvp_data.core_data.residual.swap(local_residual);
         }
     };
 
@@ -469,6 +502,9 @@ SolveTimeStepResult MateriallyNonlinearBVP::solve_next_time_step(BVPData& bvp_da
             current_time = target_time;
         }
 
+        std::cout << "- Attempting substep from time " << time_discr_data.last_converged_time
+                  << " to " << current_time << std::endl;
+
         // Initialize boundary conditions
         apply_boundary_conditions(bvp_data);
 
@@ -482,12 +518,12 @@ SolveTimeStepResult MateriallyNonlinearBVP::solve_next_time_step(BVPData& bvp_da
                                                  lin_alg.constraint_matrix.get(),
                                                  lin_alg.rhs.get(),
                                                  lin_alg.delta_solution.get(),
+                                                 lin_alg.residual.get(),
                                                  tangent_matrix_functor,
                                                  residual_functor);
         substep_converged = status.integral_stats["converged"] == 1;
-
-        // Debug override converged check TODO delete
-        substep_converged = true;
+        substep_index++;
+        iteration_index = 0;
 
         if (substep_converged)
         {
@@ -501,7 +537,6 @@ SolveTimeStepResult MateriallyNonlinearBVP::solve_next_time_step(BVPData& bvp_da
 
             // Update time data
             time_discr_data.last_converged_time = current_time;
-            time_discr_data.last_converged_time_step++;
 
             *lin_alg.solution_prev = *lin_alg.solution;
             *lin_alg.solution      = *lin_alg.delta_solution + *lin_alg.solution_prev;
@@ -532,6 +567,8 @@ SolveTimeStepResult MateriallyNonlinearBVP::solve_next_time_step(BVPData& bvp_da
 
         substep_results.push_back({ substep_converged, current_time, status });
     }
+
+    time_discr_data.last_converged_time_step++;
 
     sparse_linear_algebra::LinAlgFactory::get().end_current_log_stage();
 
