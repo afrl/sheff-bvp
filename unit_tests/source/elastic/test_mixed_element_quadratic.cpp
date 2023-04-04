@@ -47,6 +47,7 @@ int main(int argc, char** argv)
 
     auto element_workspace_ptr = std::make_unique<finite_element::ElementWorkspace>();
     simple_math::GeneralVector elem_solution_vector;
+    simple_math::GeneralVector elem_residual_vector;
     for (auto fe_accessor : bvp_data.fe_mesh().finite_elements())
     {
         if (mesh::get_category(fe_accessor.element.type()) == mesh::ElementTypeCategory::SOLID)
@@ -56,13 +57,16 @@ int main(int argc, char** argv)
               assembler::extract_element_solution_vector(bvp_data.solution(),
                                                          bvp_data.dof_manager().get_dof_maps(),
                                                          fe_accessor.element.local_index());
+            elem_residual_vector = simple_math::GeneralVector::Zero(elem_solution_vector.rows());
 
             auto params = finite_element::FiniteElement::make_params(fe_accessor.element,
                                                                      elem_solution_vector,
                                                                      fe_accessor.layout,
                                                                      *element_workspace_ptr);
 
-            auto&& result = finite_element::FiniteElement::calculate_output(params, calc_flags);
+            auto result = finite_element::FiniteElement::calculate_output(params,
+                                                                          calc_flags,
+                                                                          elem_residual_vector);
 
             auto& quad_local_strain = result.quad_results[0];
             auto& quad_local_stress = result.quad_results[1];
