@@ -7,7 +7,7 @@
 #include "finite_element/hhe_primitives/PrimitiveAlgorithms.h"
 #include "mesh/algorithms/Search.h"
 #include "sparse_linear_algebra/LinAlgFactory.h"
-#include "sparse_linear_algebra/NonLinearSolver.h"
+#include "sparse_linear_algebra/NonLinearSolve_Newton.h"
 #include "sparse_linear_algebra/SparseMatrix.h"
 #include "sparse_linear_algebra/Vector.h"
 #include "utility/Profile.h"
@@ -173,7 +173,7 @@ void MateriallyNonlinearBVP::apply_boundary_conditions(BVPData& bvp_data) const
         // IMPORTANT NOTE: this assumes the field has # of components as dimensionality
         // This works for displacement with solid elements, but reconsider what should
         // be done to handle scalar fields, shell elements, combined fields, etc.
-        // TODO figure out a robust strategy for this
+        // TO DO figure out a robust strategy for this
         bc->initialize(bvp_data.fe_mesh(),
                        bvp_data.node_to_element_map(),
                        bvp_data.dof_manager().get_dof_maps(),
@@ -411,7 +411,7 @@ SolveTimeStepResult MateriallyNonlinearBVP::solve_next_time_step(BVPData& bvp_da
 
     auto& lin_alg = static_cast<MateriallyNonlinearLinearAlgebra&>(*bvp_data.gl_lin_alg);
 
-    // TODO reevaluate how often the local array is updated and see if the tangent and residual can
+    // TO DO reevaluate how often the local array is updated and see if the tangent and residual can
     //      calculated in the same assembler execute call.
     auto& assembler = bvp_data.assembler();
     auto& dof_maps  = bvp_data.dof_manager().get_dof_maps();
@@ -446,12 +446,12 @@ SolveTimeStepResult MateriallyNonlinearBVP::solve_next_time_step(BVPData& bvp_da
         assembler.queue_assembly(finite_element::FEMatricesAndVectors::Flags::CompleteRHSVector,
                                  &residual);
         assembler.execute(local_solution, dof_maps);
-        // TODO implement residual = "internal force vector" (Ax) - "external force vector" (b)
+        // TO DO implement residual = "internal force vector" (Ax) - "external force vector" (b)
         // still missing the external force part
 
         residual.update_local_array(local_residual);
 
-        // TODO user should be able to decide if iterations should be
+        // TO DO user should be able to decide if iterations should be
         {
             // Save the BVP data with the current iteration solution
             bvp_data.core_data.solution.swap(local_solution);
