@@ -62,8 +62,7 @@ void LinearElasticBVP::init_lin_algebra(BVPData& bvp_data) const
         bvp_data.core_data.solver_opts.constraint_method);
 
     lin_alg.stiffness = sparse_linear_algebra::LinAlgFactory::get().create_matrix(dof_refs);
-    lin_alg.stiffness->set_constraint_matrix(lin_alg.constraint_matrix.get());
-    lin_alg.stiffness->allocate();
+    lin_alg.stiffness->allocate(lin_alg.constraint_matrix.get());
 
     lin_alg.solution = sparse_linear_algebra::LinAlgFactory::get().create_vector(dof_refs);
     lin_alg.solution->allocate();
@@ -136,6 +135,7 @@ SolveTimeStepResult LinearElasticBVP::solve_next_time_step(BVPData& bvp_data) co
     auto& gl_displacement      = *lin_alg.solution;
     auto& gl_eigenstrain_force = *lin_alg.eigenstrain_force;
     auto& gl_rhs               = *lin_alg.rhs;
+    auto  gl_constraints       = lin_alg.constraint_matrix.get();
 
     // Queue assembly of the global stiffness matrix
     assembler.queue_assembly(finite_element::FEMatricesAndVectors::Flags::LHSMatrix, &gl_stiffness);
@@ -166,7 +166,7 @@ SolveTimeStepResult LinearElasticBVP::solve_next_time_step(BVPData& bvp_data) co
     _F_BEGIN2("linear algebra solve");
 
     // TODO make the solver automatically update the ghost values of the solution
-    auto solver_status = lin_alg.sparse_solver->solve(&gl_stiffness, &gl_rhs, &gl_displacement);
+    auto solver_status = lin_alg.sparse_solver->solve(&gl_stiffness, &gl_rhs, &gl_displacement, gl_constraints);
     gl_displacement.update_local_array(bvp_data.solution());
 
     // Update solver status file

@@ -95,8 +95,7 @@ void MateriallyNonlinearBVP::init_lin_algebra(BVPData& bvp_data) const
     if (!lin_alg.stiffness)
     {
         lin_alg.stiffness = sparse_linear_algebra::LinAlgFactory::get().create_matrix(dof_refs);
-        lin_alg.stiffness->set_constraint_matrix(lin_alg.constraint_matrix.get());
-        lin_alg.stiffness->allocate();
+        lin_alg.stiffness->allocate(lin_alg.constraint_matrix.get());
     }
 
     if (!lin_alg.delta_solution)
@@ -308,7 +307,7 @@ void MateriallyNonlinearBVP::renumber_dofs(BVPData& bvp_data) const
         }
         for (auto& m : lin_alg.matrices())
         {
-            m->update_for_renumbering(new_to_old_dof_clone_map);
+            m->update_for_renumbering(new_to_old_dof_clone_map, lin_alg.constraint_matrix.get());
         }
 
         // Update the local copy of the solution after renumbering in case element parts are needed
