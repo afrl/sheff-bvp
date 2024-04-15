@@ -397,7 +397,7 @@ bool FractureBVP::try_to_grow_precracks(BVPData& bvp_data) const
                                   xfem_param,
                                   "./",
                                   growth_step++, // step #
-                                  0);          // substep #
+                                  0);            // substep #
 
 
     // xfem::write_json_enrichment_info("./enrichments.json",
@@ -455,7 +455,8 @@ void FractureBVP::renumber_dofs(BVPData& bvp_data) const
         lin_alg.solution->update_for_renumbering(new_to_old_dof_clone_map);
         lin_alg.rhs->update_for_renumbering(new_to_old_dof_clone_map);
         lin_alg.eigenstrain_force->update_for_renumbering(new_to_old_dof_clone_map);
-        lin_alg.stiffness->update_for_renumbering(new_to_old_dof_clone_map, lin_alg.constraint_matrix.get());
+        lin_alg.stiffness->update_for_renumbering(new_to_old_dof_clone_map,
+                                                  lin_alg.constraint_matrix.get());
 
         // Update the local copy of the solution after renumbering in case element parts are needed
         // during an assembly
