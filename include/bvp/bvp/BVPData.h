@@ -31,7 +31,7 @@ struct BVPCoreData
     std::vector<double> residual;
     std::vector<xfem::EnrichmentSurfaceData> enrichment_surfaces_data;
 
-    BVPCoreData() = default;
+    BVPCoreData()                       = default;
     BVPCoreData(BVPCoreData&&) noexcept = default;
 };
 
@@ -175,6 +175,16 @@ struct BVPData
 
     inline void add_bc(std::unique_ptr<BoundaryCondition>& bc)
     {
+        if (bc->type() == BCType::PERIODIC)
+        {
+            // For now, assume each node has the same number of DoF's at the start of the analysis.
+            // This algorithm will have to be generalized if this is not the case.
+            auto n_dofs_per_point =
+              finite_element::FiniteElement::get_n_dofs_per_point(*fe_mesh().layouts.front());
+
+            this->dof_manager();
+        }
+
         core_data.boundary_conditions.push_back(std::move(bc));
     }
 

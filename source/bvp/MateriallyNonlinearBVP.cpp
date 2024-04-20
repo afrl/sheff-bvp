@@ -95,7 +95,7 @@ void MateriallyNonlinearBVP::init_lin_algebra(BVPData& bvp_data) const
     if (!lin_alg.stiffness)
     {
         lin_alg.stiffness = sparse_linear_algebra::LinAlgFactory::get().create_matrix(dof_refs);
-        lin_alg.stiffness->allocate(lin_alg.constraint_matrix.get());
+        // Note: allocation occurs in enensure_matrices_are_allocated
     }
 
     if (!lin_alg.delta_solution)
@@ -180,6 +180,15 @@ void MateriallyNonlinearBVP::apply_boundary_conditions(BVPData& bvp_data) const
                        bc_scale_factor,
                        true, /* is_incremental */
                        *lin_alg.constraint_matrix);
+    }
+}
+
+void MateriallyNonlinearBVP::ensure_matrices_are_allocated(BVPData& bvp_data) const
+{
+    auto& lin_alg = static_cast<MateriallyNonlinearLinearAlgebra&>(*bvp_data.gl_lin_alg);
+    if (!lin_alg.stiffness->is_allocated())
+    {
+        lin_alg.stiffness->allocate(lin_alg.constraint_matrix.get());
     }
 }
 
@@ -426,7 +435,7 @@ SolveTimeStepResult MateriallyNonlinearBVP::solve_next_time_step(BVPData& bvp_da
         assembler.execute(local_solution, dof_maps);
     };
 
-    int substep_index = 0;
+    int substep_index   = 0;
     int iteration_index = 0;
     std::function<void(const sparse_linear_algebra::Vector&, sparse_linear_algebra::Vector&)>
       residual_functor = [&local_solution,
@@ -437,7 +446,7 @@ SolveTimeStepResult MateriallyNonlinearBVP::solve_next_time_step(BVPData& bvp_da
                           &ts_dir,
                           &substep_index,
                           &iteration_index](const sparse_linear_algebra::Vector& solution,
-                                          sparse_linear_algebra::Vector& residual)
+                                            sparse_linear_algebra::Vector& residual)
     {
         solution.update_local_array(local_solution);
 
@@ -506,6 +515,8 @@ SolveTimeStepResult MateriallyNonlinearBVP::solve_next_time_step(BVPData& bvp_da
 
         // Initialize boundary conditions
         apply_boundary_conditions(bvp_data);
+
+        ensure_matrices_are_allocated(bvp_data);
 
         // try to solve nonlinear problem
         bool substep_converged = false;

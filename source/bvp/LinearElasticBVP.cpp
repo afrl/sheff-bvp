@@ -62,7 +62,7 @@ void LinearElasticBVP::init_lin_algebra(BVPData& bvp_data) const
         bvp_data.core_data.solver_opts.constraint_method);
 
     lin_alg.stiffness = sparse_linear_algebra::LinAlgFactory::get().create_matrix(dof_refs);
-    lin_alg.stiffness->allocate(lin_alg.constraint_matrix.get());
+    // Note: allocation occurs in enensure_matrices_are_allocated
 
     lin_alg.solution = sparse_linear_algebra::LinAlgFactory::get().create_vector(dof_refs);
     lin_alg.solution->allocate();
@@ -97,6 +97,15 @@ void LinearElasticBVP::apply_boundary_conditions(BVPData& bvp_data) const
     }
 }
 
+void LinearElasticBVP::ensure_matrices_are_allocated(BVPData& bvp_data) const
+{
+    auto& lin_alg = static_cast<LinearElasticLinearAlgebra&>(*bvp_data.gl_lin_alg);
+    if (!lin_alg.stiffness->is_allocated())
+    {
+        lin_alg.stiffness->allocate(lin_alg.constraint_matrix.get());
+    }
+}
+
 SolveTimeStepResult LinearElasticBVP::solve_next_time_step(BVPData& bvp_data) const
 {
     _F_BEGIN2(bvp_data.bvp_name());
@@ -120,6 +129,12 @@ SolveTimeStepResult LinearElasticBVP::solve_next_time_step(BVPData& bvp_data) co
 
     // TODO indicate if Secant or Tangent with BCUpdateType::Secant
     apply_boundary_conditions(bvp_data);
+
+    _F_END();
+
+    _F_BEGIN2("allocate matrices");
+
+    ensure_matrices_are_allocated(bvp_data);
 
     _F_END();
 

@@ -12,7 +12,8 @@ enum class BCType : int8_t
 {
     DIRICHLET,
     NEUMANN,
-    TRACTION
+    TRACTION,
+    PERIODIC
 };
 
 static std::string to_string(const BCType& type)
@@ -22,6 +23,7 @@ static std::string to_string(const BCType& type)
         case BCType::DIRICHLET: return "DIRICHLET";
         case BCType::NEUMANN: return "NEUMANN";
         case BCType::TRACTION: return "TRACTION";
+        case BCType::PERIODIC: return "PERIODIC";
         default: throw _UTIL_MSG_EXCEPT("String conversion not implemented for given BCType enum.");
     }
 }

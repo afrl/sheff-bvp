@@ -56,5 +56,8 @@ class LinearElasticBVP : public BoundaryValueProblem
     ///
     /// Modifies the constraint matrix and appropriate vectors in bvp_data.gl_lin_alg.
     virtual void apply_boundary_conditions(BVPData& bvp_data) const override;
+
+    /// @see BoundaryValueProblem::ensure_matrices_are_allocated
+    virtual void ensure_matrices_are_allocated(BVPData& bvp_data) const override;
 };
 }

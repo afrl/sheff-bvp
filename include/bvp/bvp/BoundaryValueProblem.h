@@ -133,6 +133,10 @@ class BoundaryValueProblem
     /// bvp_data.gl_lin_alg).
     ///
     /// Sets bvp_data.gl_lin_alg.initialized to true.
+    ///
+    /// Note: this allocates the vectors (with an initial value of 0) but does not allocate the
+    ///       matrices, since apply_boundary_conditions should really be called first as the BC's
+    ///       might modify the sparsity pattern.
     virtual void init_lin_algebra(BVPData& bvp_data) const = 0;
 
     /// @brief Applies the boundary conditions in bvp_data.boundary_conditions to the system
@@ -140,5 +144,13 @@ class BoundaryValueProblem
     ///
     /// Modifies the constraint matrix and appropriate vectors in bvp_data.gl_lin_alg.
     virtual void apply_boundary_conditions(BVPData& bvp_data) const = 0;
+
+    /// @brief Ensure that all of the matrices are allocated, calling allocate if a matrix is not
+    ///        yet allocated.
+    ///
+    /// Note: this takes the constraints that have been added at the time this is called into
+    ///       account the sparsity pattern, but if sparsity-modifying constraints are added later,
+    ///       the update_for_renumbering() method for all matrices should be called.
+    virtual void ensure_matrices_are_allocated(BVPData& bvp_data) const = 0;
 };
 }
